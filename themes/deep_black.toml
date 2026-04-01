@@ -1,0 +1,31 @@
+# Deep Black Theme
+# Minimal high contrast dark theme for focused coding
+
+name = "deep_black"
+description = "Deep Black - Minimal high contrast dark theme"
+author = "Quantumn"
+
+[colors]
+background = "#0d0d0d"
+foreground = "#ffffff"
+accent = "#e0e0e0"
+secondary = "#808080"
+success = "#00ff00"
+error = "#ff3333"
+warning = "#ffaa00"
+info = "#5599ff"
+selection_bg = "#1a1a1a"
+selection_fg = "#ffffff"
+border = "#333333"
+muted = "#666666"
+
+[syntax]
+keyword = "#ffaa00"
+string = "#00ff00"
+number = "#ff6666"
+comment = "#555555"
+function = "#5599ff"
+type = "#ff66ff"
+variable = "#ffffff"
+operator = "#ffaa00"
+punctuation = "#888888"

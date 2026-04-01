@@ -1,0 +1,82 @@
+[package]
+name = "quantumn"
+version = "0.1.0"
+edition = "2021"
+authors = ["NahanoMark"]
+description = "Quantumn Code - An advanced AI-powered coding assistant CLI"
+license = "MIT"
+repository = "https://github.com/Akatsuki2r/Quantumn-code"
+keywords = ["cli", "ai", "coding", "assistant", "terminal"]
+categories = ["command-line-utilities", "development-tools"]
+
+[[bin]]
+name = "quantumn"
+path = "src/main.rs"
+
+[dependencies]
+# CLI argument parsing
+clap = { version = "4", features = ["derive", "color", "suggestions"] }
+
+# Terminal UI
+ratatui = "0.30"
+crossterm = { version = "0.29", features = ["event-stream"] }
+tui-textarea = "0.7"
+
+# Async runtime
+tokio = { version = "1", features = ["full", "rt-multi-thread"] }
+async-trait = "0.1"
+futures = "0.3"
+
+# HTTP client for API calls
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+
+# Error handling
+color-eyre = "0.6"
+thiserror = "2"
+anyhow = "1"
+
+# Git operations
+git2 = "0.19"
+
+# Syntax highlighting
+syntect = "5"
+
+# Terminal utilities
+dirs = "6"
+
+# Date/time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Config directories
+directories = "5"
+
+# Text processing
+textwrap = "0.16"
+
+# Unicode support
+unicode-width = "0.2"
+
+# UUID for session IDs
+uuid = { version = "1", features = ["v4", "serde"] }
+
+# Regex for pattern matching
+regex = "1"
+
+[dev-dependencies]
+assert_cmd = "2"
+predicates = "3"
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = 3
+strip = true

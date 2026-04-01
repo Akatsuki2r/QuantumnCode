@@ -1,0 +1,31 @@
+# Default Theme - Claude Code inspired
+# A modern purple theme inspired by Claude Code
+
+name = "default"
+description = "Classic Claude Code inspired theme"
+author = "Quantumn"
+
+[colors]
+background = "#1a1a2e"
+foreground = "#eaeaea"
+accent = "#7c3aed"
+secondary = "#a855f7"
+success = "#22c55e"
+error = "#ef4444"
+warning = "#f59e0b"
+info = "#3b82f6"
+selection_bg = "#7c3aed"
+selection_fg = "#ffffff"
+border = "#374151"
+muted = "#6b7280"
+
+[syntax]
+keyword = "#a855f7"
+string = "#22c55e"
+number = "#f59e0b"
+comment = "#6b7280"
+function = "#3b82f6"
+type = "#7c3aed"
+variable = "#eaeaea"
+operator = "#f59e0b"
+punctuation = "#9ca3af"

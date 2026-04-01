@@ -1,0 +1,31 @@
+# Hacker Theme
+# Matrix-style green on black theme for the true hackers
+
+name = "hacker"
+description = "Hacker - Matrix-style green on black theme"
+author = "Quantumn"
+
+[colors]
+background = "#000000"
+foreground = "#00ff00"
+accent = "#00ff00"
+secondary = "#00aa00"
+success = "#00ff00"
+error = "#ff0000"
+warning = "#ffff00"
+info = "#00ffff"
+selection_bg = "#003300"
+selection_fg = "#00ff00"
+border = "#004400"
+muted = "#006600"
+
+[syntax]
+keyword = "#00ff00"
+string = "#00aa00"
+number = "#00ff00"
+comment = "#006600"
+function = "#00ff00"
+type = "#00ff00"
+variable = "#00cc00"
+operator = "#00ff00"
+punctuation = "#00aa00"
