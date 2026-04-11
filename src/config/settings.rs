@@ -6,6 +6,13 @@ use std::fs;
 use serde::{Deserialize, Serialize};
 use color_eyre::eyre::{Result, WrapErr};
 
+
+
+
+
+
+
+
 /// Default provider options
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ProviderType {
@@ -13,6 +20,7 @@ pub enum ProviderType {
     OpenAI,
     Ollama,
     LlamaCpp,
+    LmStudio,
 }
 
 /// llama.cpp configuration
@@ -38,6 +46,30 @@ impl Default for LlamaCppConfig {
             model_paths: HashMap::new(),
             fallback_to_ollama: true,
             auto_start: false, // Disabled by default since it requires llama-server binary
+        }
+    }
+}
+
+/// LM Studio configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LmStudioConfig {
+    /// Enable LM Studio provider
+    pub enabled: bool,
+    /// Base URL for LM Studio server
+    pub base_url: String,
+    /// API token (optional, from LM Studio developer settings)
+    pub api_token: Option<String>,
+    /// Model name to model ID mapping (for custom model names)
+    pub model_paths: HashMap<String, String>,
+}
+
+impl Default for LmStudioConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            base_url: "http://localhost:1234".to_string(),
+            api_token: None,
+            model_paths: HashMap::new(),
         }
     }
 }
@@ -150,6 +182,8 @@ pub struct Settings {
     pub keybindings: std::collections::HashMap<String, String>,
     /// llama.cpp configuration
     pub llama_cpp: LlamaCppConfig,
+    /// LM Studio configuration
+    pub lm_studio: LmStudioConfig,
 }
 
 impl Default for Settings {
@@ -161,6 +195,7 @@ impl Default for Settings {
             ui: UIConfig::default(),
             keybindings: std::collections::HashMap::new(),
             llama_cpp: LlamaCppConfig::default(),
+            lm_studio: LmStudioConfig::default(),
         }
     }
 }
@@ -233,6 +268,8 @@ impl Settings {
             "llama_cpp.default_port" => Some(self.llama_cpp.default_port.to_string()),
             "llama_cpp.fallback_to_ollama" => Some(self.llama_cpp.fallback_to_ollama.to_string()),
             "llama_cpp.auto_start" => Some(self.llama_cpp.auto_start.to_string()),
+            "lm_studio.enabled" => Some(self.lm_studio.enabled.to_string()),
+            "lm_studio.base_url" => Some(self.lm_studio.base_url.clone()),
             _ => None,
         }
     }
@@ -273,6 +310,9 @@ impl Settings {
                 .wrap_err("Invalid boolean value")?,
             "llama_cpp.auto_start" => self.llama_cpp.auto_start = value.parse()
                 .wrap_err("Invalid boolean value")?,
+            "lm_studio.enabled" => self.lm_studio.enabled = value.parse()
+                .wrap_err("Invalid boolean value")?,
+            "lm_studio.base_url" => self.lm_studio.base_url = value.to_string(),
             _ => return Err(color_eyre::eyre::eyre!("Unknown setting: {}", key)),
         }
         Ok(())

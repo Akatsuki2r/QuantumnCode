@@ -1,6 +1,17 @@
 //! Help command - Comprehensive command documentation and usage guide
+//! With colored output for better readability
 
 use color_eyre::eyre::Result;
+
+// ANSI color codes
+const CYAN: &str = "\x1b[96m";
+const GREEN: &str = "\x1b[92m";
+const YELLOW: &str = "\x1b[93m";
+const MAGENTA: &str = "\x1b[95m";
+const BLUE: &str = "\x1b[94m";
+const RED: &str = "\x1b[91m";
+const BOLD: &str = "\x1b[1m";
+const RESET: &str = "\x1b[0m";
 
 /// Command information structure
 pub struct CommandInfo {
@@ -40,18 +51,6 @@ pub fn get_commands() -> Vec<CommandInfo> {
             aliases: &["e", "modify"],
         },
         CommandInfo {
-            name: "commit",
-            short_desc: "Generate AI-powered git commit message",
-            long_desc: "Analyze staged changes and generate an intelligent commit message. Supports conventional commits format.",
-            usage: "quantumn commit [--message MESSAGE] [--model MODEL]",
-            examples: &[
-                "quantumn commit                            # Generate from staged changes",
-                "quantumn commit --message \"Fix login bug\"  # Use custom message",
-                "quantumn commit --model claude-opus        # Use specific model",
-            ],
-            aliases: &["ci", "git"],
-        },
-        CommandInfo {
             name: "review",
             short_desc: "AI-powered code review",
             long_desc: "Perform comprehensive code review on specified files or staged changes. Analyzes code quality, security, and best practices.",
@@ -66,25 +65,36 @@ pub fn get_commands() -> Vec<CommandInfo> {
         CommandInfo {
             name: "test",
             short_desc: "Run tests with AI analysis",
-            long_desc: "Execute tests and provide AI-powered analysis of failures, suggestions for fixes, and coverage insights.",
+            long_desc: "Execute tests and get AI-powered analysis of results, failures, and suggestions for improvement.",
             usage: "quantumn test [PATH] [--model MODEL]",
             examples: &[
                 "quantumn test                              # Run all tests",
-                "quantumn test src/auth_tests.rs           # Run specific tests",
-                "quantumn test --model gpt-4o               # Use specific model",
+                "quantumn test tests/unit.rs                # Run specific test file",
+                "quantumn test --model claude-opus          # Use specific model",
             ],
             aliases: &["t"],
         },
         CommandInfo {
+            name: "agent",
+            short_desc: "Run agentic tasks (Bear mode)",
+            long_desc: "Execute autonomous agentic workflows with tool calling. The AI agent can read/write files, run commands, and accomplish complex tasks.",
+            usage: "quantumn agent <TASK> [--model MODEL]",
+            examples: &[
+                "quantumn agent \"Refactor the error handling\"",
+                "quantumn agent \"Add unit tests for auth module\"",
+                "quantumn agent \"Fix all clippy warnings\" --model claude-opus",
+            ],
+            aliases: &["bear"],
+        },
+        CommandInfo {
             name: "scaffold",
             short_desc: "Create new project from templates",
-            long_desc: "Generate new projects from pre-built templates. Supports multiple languages and frameworks.",
-            usage: "quantumn scaffold <TYPE> <NAME>",
+            long_desc: "Generate new project scaffolding from templates. Supports multiple languages and frameworks.",
+            usage: "quantumn scaffold [TEMPLATE] [--name NAME]",
             examples: &[
-                "quantumn scaffold rust my-app              # New Rust project",
-                "quantumn scaffold python my-script         # New Python project",
-                "quantumn scaffold node my-api              # New Node.js project",
-                "quantumn scaffold web my-website           # New web project",
+                "quantumn scaffold                          # List templates",
+                "quantumn scaffold rust-cli --name my-app   # Create Rust CLI",
+                "quantumn scaffold react --name my-frontend # Create React app",
             ],
             aliases: &["s", "new", "create"],
         },
@@ -96,8 +106,8 @@ pub fn get_commands() -> Vec<CommandInfo> {
             examples: &[
                 "quantumn session list                      # List saved sessions",
                 "quantumn session save feature-x            # Save current session",
-                "quantumn session resume feature-x         # Resume session",
-                "quantumn session delete feature-x         # Delete session",
+                "quantumn session resume feature-x          # Resume session",
+                "quantumn session delete feature-x          # Delete session",
             ],
             aliases: &["sess"],
         },
@@ -110,7 +120,6 @@ pub fn get_commands() -> Vec<CommandInfo> {
                 "quantumn config show                       # Show all settings",
                 "quantumn config get model.provider         # Get specific value",
                 "quantumn config set ui.theme oxidized      # Set theme",
-                "quantumn config set model.default_model claude-sonnet-4-20250514",
                 "quantumn config reset                      # Reset to defaults",
                 "quantumn config edit                       # Open in editor",
             ],
@@ -132,7 +141,7 @@ pub fn get_commands() -> Vec<CommandInfo> {
         CommandInfo {
             name: "model",
             short_desc: "Switch AI models and providers",
-            long_desc: "List available models, switch between providers (Anthropic, OpenAI, Ollama, llama.cpp), and configure API keys.",
+            long_desc: "List available models, switch between providers (Anthropic, OpenAI, Ollama, llama.cpp, LM Studio), and configure API keys.",
             usage: "quantumn model [PROVIDER] [--list]",
             examples: &[
                 "quantumn model list                        # List all models",
@@ -140,9 +149,18 @@ pub fn get_commands() -> Vec<CommandInfo> {
                 "quantumn model anthropic                   # Switch to Claude",
                 "quantumn model openai                      # Switch to OpenAI",
                 "quantumn model ollama                      # Switch to Ollama (local)",
-                "quantumn model llama_cpp                  # Switch to llama.cpp (local)",
             ],
-            aliases: &["m", "provider"],
+            aliases: &["m"],
+        },
+        CommandInfo {
+            name: "provider",
+            short_desc: "Show all AI providers",
+            long_desc: "Display all available AI providers with their setup instructions.",
+            usage: "quantumn provider",
+            examples: &[
+                "quantumn provider                          # Show all providers",
+            ],
+            aliases: &["p"],
         },
         CommandInfo {
             name: "status",
@@ -163,6 +181,18 @@ pub fn get_commands() -> Vec<CommandInfo> {
                 "quantumn version                           # Show version",
             ],
             aliases: &["v", "-v", "--version"],
+        },
+        CommandInfo {
+            name: "completions",
+            short_desc: "Generate shell completions",
+            long_desc: "Generate shell completion scripts for bash, zsh, fish, powershell, and elvish.",
+            usage: "quantumn completions [SHELL]",
+            examples: &[
+                "quantumn completions bash                  # Bash completions",
+                "quantumn completions zsh                   # Zsh completions",
+                "quantumn completions fish                  # Fish completions",
+            ],
+            aliases: &[],
         },
     ]
 }
@@ -212,6 +242,18 @@ pub fn get_providers() -> Vec<ProviderInfo> {
             ],
             env_key: "N/A (local)",
             setup: "1. Install: curl https://ollama.ai/install.sh | sh\n2. Run: ollama serve\n3. Pull model: ollama pull llama3.2",
+        },
+        ProviderInfo {
+            name: "lm_studio",
+            display_name: "LM Studio (Local)",
+            description: "High-performance local inference with LM Studio",
+            models: &[
+                "llama3.2       - Meta Llama 3.2 (GGUF)",
+                "mistral        - Mistral (GGUF)",
+                "qwen2.5        - Qwen 2.5 (GGUF)",
+            ],
+            env_key: "N/A (local)",
+            setup: "1. Download LM Studio\n2. lms server start OR enable server in GUI\n3. Download models to ~/.lmstudio/models/",
         },
         ProviderInfo {
             name: "llama_cpp",
@@ -308,66 +350,18 @@ pub struct ShortcutInfo {
 /// Command mode commands (prefixed with /)
 pub fn get_slash_commands() -> Vec<SlashCommandInfo> {
     vec![
-        SlashCommandInfo {
-            command: "/help",
-            description: "Show this help message",
-            autocomplete: true,
-        },
-        SlashCommandInfo {
-            command: "/clear",
-            description: "Clear the chat history",
-            autocomplete: true,
-        },
-        SlashCommandInfo {
-            command: "/mode",
-            description: "Switch mode: plan | build | chat",
-            autocomplete: true,
-        },
-        SlashCommandInfo {
-            command: "/model",
-            description: "Switch AI model",
-            autocomplete: true,
-        },
-        SlashCommandInfo {
-            command: "/provider",
-            description: "Switch AI provider",
-            autocomplete: true,
-        },
-        SlashCommandInfo {
-            command: "/theme",
-            description: "Switch theme",
-            autocomplete: true,
-        },
-        SlashCommandInfo {
-            command: "/session",
-            description: "Manage sessions: save | load | list",
-            autocomplete: true,
-        },
-        SlashCommandInfo {
-            command: "/config",
-            description: "View or edit configuration",
-            autocomplete: true,
-        },
-        SlashCommandInfo {
-            command: "/status",
-            description: "Show current status",
-            autocomplete: true,
-        },
-        SlashCommandInfo {
-            command: "/version",
-            description: "Show version",
-            autocomplete: true,
-        },
-        SlashCommandInfo {
-            command: "/exit",
-            description: "Exit Quantumn Code",
-            autocomplete: true,
-        },
-        SlashCommandInfo {
-            command: "/quit",
-            description: "Exit Quantumn Code (alias for /exit)",
-            autocomplete: true,
-        },
+        SlashCommandInfo { command: "/help", description: "Show this help message", autocomplete: true },
+        SlashCommandInfo { command: "/clear", description: "Clear the chat history", autocomplete: true },
+        SlashCommandInfo { command: "/mode", description: "Switch mode: plan | build | chat", autocomplete: true },
+        SlashCommandInfo { command: "/model", description: "Switch AI model (show all if no arg)", autocomplete: true },
+        SlashCommandInfo { command: "/provider", description: "Switch AI provider", autocomplete: true },
+        SlashCommandInfo { command: "/theme", description: "Switch theme", autocomplete: true },
+        SlashCommandInfo { command: "/session", description: "Manage sessions: save | load | list", autocomplete: true },
+        SlashCommandInfo { command: "/config", description: "View or edit configuration", autocomplete: true },
+        SlashCommandInfo { command: "/status", description: "Show current status", autocomplete: true },
+        SlashCommandInfo { command: "/version", description: "Show version", autocomplete: true },
+        SlashCommandInfo { command: "/exit", description: "Exit Quantumn Code", autocomplete: true },
+        SlashCommandInfo { command: "/quit", description: "Exit Quantumn Code (alias for /exit)", autocomplete: true },
     ]
 }
 
@@ -389,8 +383,14 @@ pub async fn run(section: Option<String>) -> Result<()> {
         Some("quick") => print_quick_start(),
         None => print_full_help(),
         _ => {
-            println!("Unknown help section: {}", section.unwrap());
-            println!("Available sections: commands, providers, themes, shortcuts, slash, quick");
+            eprintln!("{}Unknown help section: {}{}", RED, section.unwrap(), RESET);
+            println!("Available sections: {}, {}, {}, {}, {}, {}",
+                format!("{}commands{}", CYAN, RESET),
+                format!("{}providers{}", CYAN, RESET),
+                format!("{}themes{}", CYAN, RESET),
+                format!("{}shortcuts{}", CYAN, RESET),
+                format!("{}slash{}", CYAN, RESET),
+                format!("{}quick{}", CYAN, RESET));
         }
     }
     Ok(())
@@ -399,167 +399,160 @@ pub async fn run(section: Option<String>) -> Result<()> {
 /// Print full help documentation
 fn print_full_help() {
     print_banner();
-    println!();
     print_quick_start();
-    println!();
     print_commands();
-    println!();
     print_providers();
-    println!();
     print_themes();
-    println!();
     print_shortcuts();
-    println!();
     print_slash_commands();
     print_footer();
 }
 
-/// Print the Quantumn Code banner
+/// Print the Quantumn Code banner with colors
 fn print_banner() {
     println!();
-    println!(r"   ____  _   _ _   _ _   _ ___  ____  ");
-    println!(r"  |  _ \| | | | \ | | \ | |   \|_  / ");
-    println!(r"  | |_) | |_| |  \| |  \| | |) |/ /  ");
-    println!(r"  |  _ <|  _  | |\  | |\  |   // /   ");
-    println!(r"  |_| \_\_| |_|_| \_|_| \_|__/___|   ");
+    println!("{}   ____  _   _ _   _ _   _ ___  ____  {}", MAGENTA, RESET);
+    println!("{}  |  _ \\| | | | \\ | | \\ | |   \\|_  / {}", CYAN, RESET);
+    println!("{}  | |_) | |_| |  \\| |  \\| | |) |/ /  {}", YELLOW, RESET);
+    println!("{}  |  _ <|  _  | |\\  | |\\  |   // /   {}", BLUE, RESET);
+    println!("{}  |_| \\_\\_| |_|_| \\_|_| \\_|__/___|   {}", GREEN, RESET);
     println!();
-    println!("  An advanced AI-powered coding assistant CLI");
-    println!("  Built in Rust for performance and reliability");
+    println!("{}  {}An advanced AI-powered coding assistant CLI{}", BOLD, YELLOW, RESET);
+    println!("{}  Built in Rust for performance and reliability{}", CYAN, RESET);
     println!();
 }
 
 /// Print footer
 fn print_footer() {
     println!();
-    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("{}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{}", CYAN, RESET);
     println!();
-    println!("  Documentation: https://github.com/Akatsuki2r/QuantumCode");
-    println!("  Issues:        https://github.com/Akatsuki2r/QuantumCode/issues");
+    println!("{}  Documentation:{} https://github.com/Akatsuki2r/QuantumCode", GREEN, RESET);
+    println!("{}  Issues:{}        https://github.com/Akatsuki2r/QuantumCode/issues", RED, RESET);
     println!();
-    println!("  Made with Rust by NahanoMark");
+    println!("{}  Made with Rust by NahanoMark{}", YELLOW, RESET);
     println!();
 }
 
 /// Print quick start guide
 fn print_quick_start() {
-    println!("┌─────────────────────────────────────────────────────────────────┐");
-    println!("│  QUICK START                                                    │");
-    println!("└─────────────────────────────────────────────────────────────────┘");
+    println!("{}┌─────────────────────────────────────────────────────────────────┐{}", CYAN, RESET);
+    println!("{}│  {}QUICK START{}                                                   │{}", CYAN, YELLOW, CYAN, RESET);
+    println!("{}└─────────────────────────────────────────────────────────────────┘{}", CYAN, RESET);
     println!();
-    println!("  1. Install:");
+    println!("  {}1. Install:{} {}", CYAN, RESET, RESET);
     println!("     cargo install quantumn");
-    println!("     # or");
+    println!("     {}# or{}", CYAN, RESET);
     println!("     npm install -g @quantumn/code");
     println!();
-    println!("  2. Set up your AI provider:");
-    println!("     export ANTHROPIC_API_KEY=your_key_here   # For Claude");
-    println!("     # or");
-    println!("     export OPENAI_API_KEY=your_key_here        # For OpenAI");
-    println!("     # or use local models with Ollama:");
+    println!("  {}2. Set up your AI provider:{} {}", CYAN, RESET, RESET);
+    println!("     export ANTHROPIC_API_KEY=your_key_here   {}# For Claude{}", CYAN, RESET);
+    println!("     {}# or{}", CYAN, RESET);
+    println!("     export OPENAI_API_KEY=your_key_here        {}# For OpenAI{}", CYAN, RESET);
+    println!("     {}# or use local models with Ollama:{} {}", CYAN, RESET, RESET);
     println!("     ollama serve && ollama pull llama3.2");
     println!();
-    println!("  3. Start chatting:");
-    println!("     quantumn                                 # Interactive mode");
-    println!("     quantumn chat \"Explain this code\"        # One-shot query");
+    println!("  {}3. Start chatting:{} {}", CYAN, RESET, RESET);
+    println!("     quantumn                                 {}# Interactive mode{}", CYAN, RESET);
+    println!("     quantumn chat \"Explain this code\"        {}# One-shot query{}", CYAN, RESET);
     println!();
-    println!("  4. Useful commands:");
-    println!("     quantumn edit src/main.rs                 # Edit file with AI");
-    println!("     quantumn commit                           # Generate commit");
-    println!("     quantumn review src/lib.rs                # Code review");
+    println!("  {}4. Useful commands:{} {}", CYAN, RESET, RESET);
+    println!("     quantumn edit src/main.rs                 {}# Edit file with AI{}", CYAN, RESET);
+    println!("     quantumn agent \"Refactor this\"          {}# Agentic mode{}", CYAN, RESET);
+    println!("     quantumn review src/lib.rs                {}# Code review{}", CYAN, RESET);
     println!();
 }
 
 /// Print commands section
 fn print_commands() {
-    println!("┌─────────────────────────────────────────────────────────────────┐");
-    println!("│  COMMANDS                                                       │");
-    println!("└─────────────────────────────────────────────────────────────────┘");
+    println!("{}┌─────────────────────────────────────────────────────────────────┐{}", CYAN, RESET);
+    println!("{}│  {}COMMANDS{}                                                      │{}", CYAN, GREEN, CYAN, RESET);
+    println!("{}└─────────────────────────────────────────────────────────────────┘{}", CYAN, RESET);
     println!();
 
     let commands = get_commands();
     let max_name_len = commands.iter().map(|c| c.name.len()).max().unwrap_or(12);
 
     for cmd in &commands {
-        println!("  {:width$}  {}", cmd.name, cmd.short_desc, width = max_name_len);
+        println!("  {}{:width$}{}  {}", CYAN, cmd.name, RESET, cmd.short_desc, width = max_name_len);
         if !cmd.aliases.is_empty() {
-            println!("  {:width$}  Aliases: {}", "", cmd.aliases.join(", "), width = max_name_len);
+            println!("  {:width$}  {}Aliases: {}{}", "", CYAN, cmd.aliases.join(", "), RESET, width = max_name_len);
         }
     }
 
     println!();
-    println!("  Use 'quantumn <command> --help' for detailed usage");
-    println!("  Use 'quantumn help commands' for full command reference");
+    println!("  {}Use 'quantumn <command> --help' for detailed usage{}", YELLOW, RESET);
 }
 
 /// Print providers section
 fn print_providers() {
-    println!("┌─────────────────────────────────────────────────────────────────┐");
-    println!("│  AI PROVIDERS                                                   │");
-    println!("└─────────────────────────────────────────────────────────────────┘");
+    println!("{}┌─────────────────────────────────────────────────────────────────┐{}", CYAN, RESET);
+    println!("{}│  {}AI PROVIDERS{}                                                  │{}", CYAN, MAGENTA, CYAN, RESET);
+    println!("{}└─────────────────────────────────────────────────────────────────┘{}", CYAN, RESET);
     println!();
 
     for provider in get_providers() {
-        println!("  {} ({})", provider.display_name, provider.name);
+        println!("  {}{} ({}){}", BOLD, provider.display_name, provider.name, RESET);
         println!("  {}", provider.description);
-        println!("  Models:");
+        println!("  {}Models:{}", GREEN, RESET);
         for model in provider.models {
-            println!("    • {}", model);
+            println!("    {}• {}{}", CYAN, model, RESET);
         }
-        println!("  API Key: {}", provider.env_key);
-        println!("  Setup: {}", provider.setup);
+        println!("  {}API Key:{} {}", YELLOW, RESET, provider.env_key);
+        println!("  {}Setup:{} {}", YELLOW, RESET, provider.setup);
         println!();
     }
 }
 
 /// Print themes section
 fn print_themes() {
-    println!("┌─────────────────────────────────────────────────────────────────┐");
-    println!("│  THEMES                                                         │");
-    println!("└─────────────────────────────────────────────────────────────────┘");
+    println!("{}┌─────────────────────────────────────────────────────────────────┐{}", CYAN, RESET);
+    println!("{}│  {}THEMES{}                                                        │{}", CYAN, BLUE, CYAN, RESET);
+    println!("{}└─────────────────────────────────────────────────────────────────┘{}", CYAN, RESET);
     println!();
 
     for theme in get_themes() {
-        let default_marker = if theme.name == "oxidized" { " [default]" } else { "" };
-        println!("  {}{} - {}", theme.name, default_marker, theme.description);
+        let default_marker = if theme.name == "oxidized" { format!(" {}[default]{}", GREEN, RESET) } else { String::new() };
+        println!("  {}{}{}{} - {}", CYAN, theme.name, default_marker, RESET, theme.description);
     }
 
     println!();
-    println!("  Set theme: quantumn theme set <name>");
-    println!("  List themes: quantumn theme list");
+    println!("  {}Set theme:{} quantumn theme set <name>", YELLOW, RESET);
+    println!("  {}List themes:{} quantumn theme list", YELLOW, RESET);
 }
 
 /// Print shortcuts section
 fn print_shortcuts() {
-    println!("┌─────────────────────────────────────────────────────────────────┐");
-    println!("│  KEYBOARD SHORTCUTS                                             │");
-    println!("└─────────────────────────────────────────────────────────────────┘");
+    println!("{}┌─────────────────────────────────────────────────────────────────┐{}", CYAN, RESET);
+    println!("{}│  {}KEYBOARD SHORTCUTS{}                                            │{}", CYAN, YELLOW, CYAN, RESET);
+    println!("{}└─────────────────────────────────────────────────────────────────┘{}", CYAN, RESET);
     println!();
 
     let shortcuts = get_shortcuts();
     let max_key_len = shortcuts.iter().map(|s| s.key.len()).max().unwrap_or(10);
 
     for shortcut in &shortcuts {
-        println!("  {:width$}  {}", shortcut.key, shortcut.action, width = max_key_len);
+        println!("  {}{:width$}{}  {}", CYAN, shortcut.key, RESET, shortcut.action, width = max_key_len);
     }
 }
 
 /// Print slash commands section
 fn print_slash_commands() {
-    println!("┌─────────────────────────────────────────────────────────────────┐");
-    println!("│  SLASH COMMANDS (in interactive mode)                          │");
-    println!("└─────────────────────────────────────────────────────────────────┘");
+    println!("{}┌─────────────────────────────────────────────────────────────────┐{}", CYAN, RESET);
+    println!("{}│  {}SLASH COMMANDS (in interactive mode){}                         │{}", CYAN, MAGENTA, CYAN, RESET);
+    println!("{}└─────────────────────────────────────────────────────────────────┘{}", CYAN, RESET);
     println!();
 
     let commands = get_slash_commands();
     let max_cmd_len = commands.iter().map(|c| c.command.len()).max().unwrap_or(10);
 
     for cmd in &commands {
-        println!("  {:width$}  {}", cmd.command, cmd.description, width = max_cmd_len);
+        println!("  {}{:width$}{}  {}", CYAN, cmd.command, RESET, cmd.description, width = max_cmd_len);
     }
 
     println!();
-    println!("  Type / followed by command in interactive mode");
-    println!("  Tab completion is available for all slash commands");
+    println!("  {}Type / followed by command in interactive mode{}", YELLOW, RESET);
+    println!("  {}Tab completion is available for all slash commands{}", CYAN, RESET);
 }
 
 #[cfg(test)]
@@ -571,6 +564,8 @@ mod tests {
         let commands = get_commands();
         assert!(!commands.is_empty());
         assert!(commands.iter().any(|c| c.name == "chat"));
+        assert!(commands.iter().any(|c| c.name == "agent"));
+        assert!(commands.iter().any(|c| c.name == "completions"));
     }
 
     #[test]
@@ -578,6 +573,7 @@ mod tests {
         let providers = get_providers();
         assert!(!providers.is_empty());
         assert!(providers.iter().any(|p| p.name == "anthropic"));
+        assert!(providers.iter().any(|p| p.name == "llama_cpp"));
     }
 
     #[test]
@@ -585,5 +581,14 @@ mod tests {
         let themes = get_themes();
         assert!(!themes.is_empty());
         assert!(themes.iter().any(|t| t.name == "oxidized"));
+    }
+
+    #[test]
+    fn test_get_slash_commands() {
+        let commands = get_slash_commands();
+        assert!(!commands.is_empty());
+        assert!(commands.iter().any(|c| c.command == "/model"));
+        assert!(commands.iter().any(|c| c.command == "/provider"));
+        assert!(commands.iter().any(|c| c.command == "/theme"));
     }
 }

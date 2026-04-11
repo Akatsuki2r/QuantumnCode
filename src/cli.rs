@@ -18,9 +18,10 @@ and provides a beautiful terminal UI for long development sessions.
 
 Examples:
   quantumn                      Start interactive session
-  quantumn \"explain this code\"  One-shot query
+  quantumn chat \"explain this code\"  One-shot query
   quantumn edit src/main.rs     Edit file with AI
-  quantumn commit               Generate commit message
+  quantumn model --list         List all models
+  quantumn provider             Show all providers
   quantumn --theme tokyo_night  Use Tokyo Night theme
 "
 )]
@@ -69,17 +70,6 @@ pub enum Commands {
         model: Option<String>,
     },
 
-    /// Generate a git commit message with AI
-    Commit {
-        /// Custom commit message prompt
-        #[arg(long)]
-        message: Option<String>,
-
-        /// Model to use
-        #[arg(short, long)]
-        model: Option<String>,
-    },
-
     /// Perform AI-powered code review
     Review {
         /// Files to review (defaults to staged changes)
@@ -98,15 +88,6 @@ pub enum Commands {
         /// Model to use
         #[arg(short, long)]
         model: Option<String>,
-    },
-
-    /// Scaffold a new project
-    Scaffold {
-        /// Project type (rust, python, node, web, etc.)
-        project_type: String,
-
-        /// Project name
-        name: String,
     },
 
     /// Manage sessions
@@ -129,10 +110,17 @@ pub enum Commands {
 
     /// Switch between AI models/providers
     Model {
-        /// Provider to use (anthropic, openai, ollama)
+        /// Provider to use (anthropic, openai, ollama, llama_cpp, lm_studio)
         provider: Option<String>,
 
         /// List available models
+        #[arg(short, long)]
+        list: bool,
+    },
+
+    /// Show all AI providers
+    Provider {
+        /// List all available providers
         #[arg(short, long)]
         list: bool,
     },
@@ -153,6 +141,16 @@ pub enum Commands {
     Completions {
         /// Shell to generate completions for (bash, zsh, fish, powershell, elvish)
         shell: Option<String>,
+    },
+
+    /// Run an agentic task with tool calling (Bear mode)
+    Agent {
+        /// Task to accomplish
+        task: String,
+
+        /// Model to use
+        #[arg(short, long)]
+        model: Option<String>,
     },
 }
 

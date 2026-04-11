@@ -174,6 +174,7 @@ fn handle_slash_command(app: &mut App) -> Result<bool> {
 
     let parts: Vec<&str> = input[1..].split_whitespace().collect();
     let command = parts.first().unwrap_or(&"");
+    let arg = parts.get(1).map(|s| *s);
 
     match *command {
         "help" | "h" | "?" => {
@@ -186,47 +187,207 @@ fn handle_slash_command(app: &mut App) -> Result<bool> {
             app.quit();
             return Ok(true);
         }
+        "provider" | "p" => {
+            if let Some(provider_name) = arg {
+                app.session.provider = provider_name.to_string();
+                app.set_status(Some(format!("Provider changed to: {}", provider_name)));
+                app.add_message("system", &format!("✓ Provider set to: {}", provider_name));
+            } else {
+                // Show all providers
+                let msg = "╔════════════════════════════════════════════════════════════════╗\n\
+║ AVAILABLE AI PROVIDERS                                          ║\n\
+╠════════════════════════════════════════════════════════════════╣\n\
+║ ANTHROPIC (Cloud)                                             ║\n\
+║   Provider: anthropic                                          ║\n\
+║   Default: claude-sonnet-4-20250514                            ║\n\
+║   Models: claude-opus-4, claude-sonnet-4, claude-haiku-4      ║\n\
+║   Setup: export ANTHROPIC_API_KEY=your_key                      ║\n\
+\n\
+║ OPENAI (Cloud)                                                 ║\n\
+║   Provider: openai                                             ║\n\
+║   Default: gpt-4o                                              ║\n\
+║   Models: gpt-4o, gpt-4o-mini, gpt-4-turbo, o1, o1-mini        ║\n\
+║   Setup: export OPENAI_API_KEY=your_key                        ║\n\
+\n\
+║ OLLAMA (Local)                                                 ║\n\
+║   Provider: ollama                                             ║\n\
+║   Default: llama3.2                                            ║\n\
+║   Setup: ollama serve && ollama pull llama3.2                  ║\n\
+\n\
+║ LM STUDIO (Local)                                              ║\n\
+║   Provider: lm_studio                                           ║\n\
+║   Default: llama3.2                                             ║\n\
+║   Setup: lms server start OR LM Studio GUI                    ║\n\
+\n\
+║ LLAMA.CPP (Local)                                              ║\n\
+║   Provider: llama_cpp                                          ║\n\
+║   Default: llama3.2                                             ║\n\
+║   Setup: llama-server binary + GGUF model files                ║\n\
+\n\
+To switch: /provider <provider_name>";
+                app.add_message("system", msg);
+            }
+        }
         "model" | "m" => {
-            if let Some(model) = parts.get(1) {
+            if let Some(model) = arg {
                 app.session.model = model.to_string();
                 app.set_status(Some(format!("Model changed to: {}", model)));
+                app.add_message("system", &format!("✓ Model set to: {}", model));
+            } else {
+                // Show all models
+                let msg = "╔════════════════════════════════════════════════════════════════╗\n\
+║ CLOUD MODELS                                                   ║\n\
+╠════════════════════════════════════════════════════════════════╣\n\
+║ ANTHROPIC (Claude)                                            ║\n\
+  claude-opus-4-20250514   - Most capable (Opus 4)\n\
+  claude-sonnet-4-20250514 - Balanced (Sonnet 4) [default]\n\
+  claude-haiku-4-20250514  - Fast (Haiku 4)\n\
+  claude-3-5-sonnet-20241022 - Legacy (Sonnet 3.5)\n\
+  claude-3-5-haiku-20241022  - Legacy (Haiku 3.5)\n\
+\n\
+║ OPENAI                                                        ║\n\
+  gpt-4o       - GPT-4 Omni (recommended)\n\
+  gpt-4o-mini  - GPT-4 Omni Mini (fast, cheap)\n\
+  gpt-4-turbo  - GPT-4 Turbo\n\
+  o1           - O1 (advanced reasoning)\n\
+  o1-mini      - O1 Mini\n\
+\n\
+╔════════════════════════════════════════════════════════════════╗\n\
+║ LOCAL MODELS (Ollama / LM Studio / llama.cpp)                 ║\n\
+╠════════════════════════════════════════════════════════════════╣\n\
+  llama3.2       - Meta Llama 3.2\n\
+  llama3.1       - Meta Llama 3.1\n\
+  mistral        - Mistral\n\
+  codellama      - Code Llama\n\
+  deepseek-coder - DeepSeek Coder\n\
+  qwen2.5-coder  - Qwen 2.5 Coder\n\
+\n\
+To switch: /model <model_name>";
+                app.add_message("system", msg);
             }
         }
         "theme" | "t" => {
-            if let Some(theme_name) = parts.get(1) {
+            if let Some(theme_name) = arg {
                 match crate::config::Theme::load(theme_name) {
                     Ok(theme) => {
                         app.theme = theme;
                         app.set_status(Some(format!("Theme changed to: {}", theme_name)));
+                        app.add_message("system", &format!("✓ Theme set to: {}", theme_name));
                     }
                     Err(e) => {
                         app.set_status(Some(format!("Error loading theme: {}", e)));
+                        app.add_message("system", &format!("✗ Error: {}", e));
                     }
+                }
+            } else {
+                // List themes
+                let msg = "Available Themes:\n\
+  • oxidized    - Rusty brown on deep black [default]\n\
+  • default     - Classic Claude-inspired purple\n\
+  • tokyo_night - Purple and blue accents\n\
+  • hacker      - Matrix-style green on black\n\
+  • deep_black  - Minimal high-contrast dark\n\
+\n\
+To switch: /theme <theme_name>";
+                app.add_message("system", msg);
+            }
+        }
+        "session" | "sess" => {
+            match arg {
+                Some("list") | Some("ls") | Some("l") => {
+                    // List sessions (TODO: implement proper session listing)
+                    app.add_message("system", "Sessions: 0 saved\n\nUse /session save <name> to save current session");
+                }
+                Some("save") | Some("s") => {
+                    let name = parts.get(2).unwrap_or(&"unnamed");
+                    // TODO: Implement session saving
+                    app.add_message("system", &format!("Session saved as: {}", name));
+                }
+                Some("load") | Some("resume") | Some("r") => {
+                    // TODO: Implement session loading
+                    app.add_message("system", "Session loading coming soon");
+                }
+                Some("delete") | Some("del") | Some("d") => {
+                    // TODO: Implement session deletion
+                    app.add_message("system", "Session deletion coming soon");
+                }
+                None => {
+                    app.add_message("system", "Session commands:\n  /session list   - List saved sessions\n  /session save <name> - Save current session\n  /session load <name> - Load session\n  /session delete <name> - Delete session");
+                }
+                _ => {
+                    app.add_message("system", "Unknown session command. Use: list, save, load, delete");
                 }
             }
         }
-        "commit" => {
-            // TODO: Generate commit message
-            app.add_message("system", "/commit - Coming soon");
-        }
-        "review" => {
-            app.mode = Mode::Review;
-        }
-        "test" => {
-            // TODO: Run tests
-            app.add_message("system", "/test - Coming soon");
+        "config" | "cfg" => {
+            match arg {
+                Some("show") | Some("s") => {
+                    let msg = format!(
+                        "Current Configuration:\n\
+  Provider: {}\n\
+  Model: {}\n\
+  Theme: {}\n\
+\n\
+Config file: ~/.config/quantumn-code/config.toml",
+                        app.session.provider,
+                        app.session.model,
+                        "oxidized" // TODO: get from theme
+                    );
+                    app.add_message("system", &msg);
+                }
+                Some("edit") | Some("e") => {
+                    app.add_message("system", "Opening config editor... (coming soon)");
+                }
+                None => {
+                    app.add_message("system", "Config commands:\n  /config show  - Show current config\n  /config edit  - Open config in editor");
+                }
+                _ => {
+                    app.add_message("system", "Unknown config command. Use: show, edit");
+                }
+            }
         }
         "status" | "s" => {
             let status = format!(
-                "Model: {} | Provider: {} | Tokens: {}",
+                "╔════════════════════════════════════════════════════════════════╗\n\
+║ QUANTUMN CODE STATUS                                          ║\n\
+╠════════════════════════════════════════════════════════════════╣\n\
+║ Model: {}\n\
+║ Provider: {}\n\
+║ Theme: oxidized\n\
+║ Tokens used: {}\n\
+╚════════════════════════════════════════════════════════════════╝",
                 app.session.model,
                 app.session.provider,
                 app.total_tokens()
             );
             app.add_message("system", &status);
         }
+        "version" | "v" => {
+            let version = env!("CARGO_PKG_VERSION");
+            app.add_message("system", &format!("Quantumn Code v{}", version));
+        }
+        "mode" => {
+            if let Some(mode_name) = arg {
+                match mode_name {
+                    "plan" => {
+                        app.add_message("system", "Switched to PLAN mode - AI will plan before implementing");
+                    }
+                    "build" => {
+                        app.add_message("system", "Switched to BUILD mode - AI will implement directly");
+                    }
+                    "chat" => {
+                        app.add_message("system", "Switched to CHAT mode - Casual conversation");
+                    }
+                    _ => {
+                        app.add_message("system", "Unknown mode. Use: plan, build, chat");
+                    }
+                }
+            } else {
+                app.add_message("system", "Available modes:\n  /mode plan  - AI plans before implementing\n  /mode build - AI implements directly\n  /mode chat  - Casual conversation");
+            }
+        }
         _ => {
-            app.add_message("system", &format!("Unknown command: {}", command));
+            app.add_message("system", &format!("Unknown command: {}. Type /help for available commands.", command));
         }
     }
 

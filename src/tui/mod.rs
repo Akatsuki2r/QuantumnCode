@@ -38,8 +38,8 @@ pub async fn run_interactive(model: Option<String>, theme: Option<String>) -> Re
 
 /// Initialize and run the TUI
 fn run_tui(mut app: crate::app::App) -> Result<()> {
-    // Setup terminal
-    let backend = CrosstermBackend::new(std::io::stderr());
+    // Setup terminal - use stdout for the backend
+    let backend = CrosstermBackend::new(std::io::stdout());
     let mut terminal = Terminal::new(backend)?;
 
     // Setup panic hook to restore terminal
@@ -50,9 +50,18 @@ fn run_tui(mut app: crate::app::App) -> Result<()> {
     }));
 
     // Enter alternate screen
-    crossterm::terminal::enable_raw_mode()?;
+    crossterm::terminal::enable_raw_mode().map_err(|e| {
+        color_eyre::eyre::eyre!(
+            "Failed to enable raw mode. This usually means you're not running in a terminal.\n\
+            \nFor non-interactive usage, try:\n\
+              • quantumn chat \"your question\"  (one-shot query)\n\
+              • quantumn model --list          (list models)\n\
+              • quantumn provider              (show providers)\n\
+            \nOr run this command in a real terminal (not VS Code integrated terminal)."
+        )
+    })?;
     crossterm::execute!(
-        std::io::stderr(),
+        std::io::stdout(),
         crossterm::terminal::EnterAlternateScreen,
         crossterm::event::EnableMouseCapture
     )?;
@@ -92,7 +101,7 @@ fn run_app<B: Backend>(
 fn restore_terminal() -> Result<()> {
     crossterm::terminal::disable_raw_mode()?;
     crossterm::execute!(
-        std::io::stderr(),
+        std::io::stdout(),
         crossterm::terminal::LeaveAlternateScreen,
         crossterm::event::DisableMouseCapture
     )?;

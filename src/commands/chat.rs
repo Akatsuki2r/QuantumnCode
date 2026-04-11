@@ -9,6 +9,7 @@ use crate::providers::anthropic::AnthropicProvider;
 use crate::providers::openai::OpenAIProvider;
 use crate::providers::ollama::OllamaProvider;
 use crate::providers::llama_cpp::LlamaCppProvider;
+use crate::providers::lm_studio::LmStudioProvider;
 use crate::supervisor::ModelSupervisor;
 use crate::prompts::{Mode, get_full_prompt};
 
@@ -63,6 +64,11 @@ pub fn get_provider(model_name: &str, settings: &Settings) -> Box<dyn Provider> 
             provider.set_model(model_name.to_string());
             Box::new(provider)
         }
+        "lm_studio" => {
+            let mut provider = LmStudioProvider::new();
+            provider.set_model(model_name.to_string());
+            Box::new(provider)
+        }
         _ => {
             let mut provider = OllamaProvider::new();
             provider.set_model(model_name.to_string());
@@ -71,14 +77,58 @@ pub fn get_provider(model_name: &str, settings: &Settings) -> Box<dyn Provider> 
     }
 }
 
+/// Check if local providers are running and prompt user if needed
+pub fn check_local_provider(provider_name: &str) -> Result<bool> {
+    match provider_name {
+        "ollama" => {
+            let ollama = OllamaProvider::new();
+            let is_running = futures::executor::block_on(ollama.is_running());
+            if !is_running {
+                println!("⚠ Ollama is not running!");
+                println!("  To fix: ollama serve");
+                println!("  Then: ollama pull <model_name>");
+                return Ok(false);
+            }
+            println!("✓ Ollama is running");
+        }
+        "lm_studio" => {
+            let lm_studio = LmStudioProvider::new();
+            let is_available = futures::executor::block_on(lm_studio.is_available());
+            if !is_available {
+                println!("⚠ LM Studio is not available!");
+                println!("  Options:");
+                println!("  1. Start LM Studio application");
+                println!("  2. Run: lms server start");
+                println!("  3. Or download GGUF models to ~/.lmstudio/models/");
+                return Ok(false);
+            }
+            println!("✓ LM Studio is available");
+        }
+        "llama_cpp" => {
+            println!("⚠ llama.cpp requires manual setup:");
+            println!("  1. llama-server binary in PATH");
+            println!("  2. GGUF model files in config");
+        }
+        _ => {}
+    }
+    Ok(true)
+}
+
 /// Run one-shot query
 async fn run_one_shot(prompt: &str, model: Option<String>, mode: Mode) -> Result<()> {
     // Load settings
     let settings = Settings::load()?;
     let model_name = model.unwrap_or_else(|| settings.model.default_model.clone());
+    let provider_name = &settings.model.provider;
+
+    // Check local providers before attempting chat
+    if let Err(_) = check_local_provider(provider_name) {
+        println!("\nPlease start the local provider and try again.");
+        return Ok(());
+    }
 
     println!("Quantumn Code - Using model: {}", model_name);
-    println!("Provider: {}", settings.model.provider);
+    println!("Provider: {}", provider_name);
     println!("Mode: {}", mode);
     println!("Prompt: {}", prompt);
     println!();

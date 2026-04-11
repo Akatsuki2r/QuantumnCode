@@ -13,6 +13,7 @@
 use clap::Parser;
 use color_eyre::eyre::Result;
 
+mod agent;
 mod cli;
 mod app;
 mod config;
@@ -67,20 +68,12 @@ async fn run(cli: Cli) -> Result<()> {
             commands::edit::run(file, prompt, model.or(cli.model)).await
         }
 
-        Some(Commands::Commit { message, model }) => {
-            commands::git::commit(message, model.or(cli.model)).await
-        }
-
         Some(Commands::Review { files, model }) => {
             commands::review::run(files, model.or(cli.model)).await
         }
 
         Some(Commands::Test { path, model }) => {
             commands::test::run(path, model.or(cli.model)).await
-        }
-
-        Some(Commands::Scaffold { project_type, name }) => {
-            commands::scaffold::run(project_type, name).await
         }
 
         Some(Commands::Session { command }) => {
@@ -99,6 +92,10 @@ async fn run(cli: Cli) -> Result<()> {
             commands::model::run(provider, list).await
         }
 
+        Some(Commands::Provider { list }) => {
+            commands::model::run_provider(list).await
+        }
+
         Some(Commands::Status) => {
             commands::status::run().await
         }
@@ -114,6 +111,10 @@ async fn run(cli: Cli) -> Result<()> {
 
         Some(Commands::Completions { shell }) => {
             commands::completions::run(shell).await
+        }
+
+        Some(Commands::Agent { task, model }) => {
+            commands::agent::run(task, model.or(cli.model)).await
         }
     }
 }
