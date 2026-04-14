@@ -501,7 +501,13 @@ fn handle_provider_select_mode(app: &mut App, key: crossterm::event::KeyEvent) -
             app.session.provider = provider;
             app.session.model = model;
             app.mode = Mode::Normal;
-            app.add_message("system", &format!("Switched to {} with model {}", app.session.provider, app.session.model));
+            app.add_message(
+                "system",
+                &format!(
+                    "Switched to {} with model {}",
+                    app.session.provider, app.session.model
+                ),
+            );
             Ok(false)
         }
         Some(DropdownAction::Close) => {
@@ -510,18 +516,15 @@ fn handle_provider_select_mode(app: &mut App, key: crossterm::event::KeyEvent) -
         }
         Some(DropdownAction::NeedsApiKey) => {
             // TODO: Prompt for API key
-            app.add_message("system", "API key required. Set ANTHROPIC_API_KEY or OPENAI_API_KEY environment variable.");
+            app.add_message(
+                "system",
+                "API key required. Set ANTHROPIC_API_KEY or OPENAI_API_KEY environment variable.",
+            );
             Ok(false)
         }
-        Some(DropdownAction::ProviderSelected) => {
-            Ok(false)
-        }
-        Some(DropdownAction::BackToProviders) => {
-            Ok(false)
-        }
-        Some(DropdownAction::Navigate) | Some(DropdownAction::OpenProviders) => {
-            Ok(false)
-        }
+        Some(DropdownAction::ProviderSelected) => Ok(false),
+        Some(DropdownAction::BackToProviders) => Ok(false),
+        Some(DropdownAction::Navigate) | Some(DropdownAction::OpenProviders) => Ok(false),
         None => Ok(false),
     }
 }

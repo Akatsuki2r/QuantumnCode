@@ -71,9 +71,7 @@ pub fn discover_all_models() -> LocalModelConfig {
 
 /// Discover Ollama models using `ollama list`
 fn discover_ollama_models(config: &mut LocalModelConfig) {
-    let output = Command::new("ollama")
-        .args(["list"])
-        .output();
+    let output = Command::new("ollama").args(["list"]).output();
 
     if let Ok(output) = output {
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -119,9 +117,7 @@ fn discover_lm_studio_models(config: &mut LocalModelConfig) {
                     for sub_entry in sub_entries.flatten() {
                         let sub_path = sub_entry.path();
                         if sub_path.extension().map(|e| e == "gguf").unwrap_or(false) {
-                            let size = std::fs::metadata(&sub_path)
-                                .map(|m| m.len())
-                                .unwrap_or(0);
+                            let size = std::fs::metadata(&sub_path).map(|m| m.len()).unwrap_or(0);
 
                             let name = sub_path
                                 .file_stem()

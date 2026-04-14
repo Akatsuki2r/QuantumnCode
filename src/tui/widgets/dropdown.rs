@@ -17,7 +17,14 @@ pub struct ProviderInfo {
 }
 
 impl ProviderInfo {
-    pub fn new(name: &str, display_name: &str, requires_api_key: bool, default_model: &str, models: Vec<String>, is_local: bool) -> Self {
+    pub fn new(
+        name: &str,
+        display_name: &str,
+        requires_api_key: bool,
+        default_model: &str,
+        models: Vec<String>,
+        is_local: bool,
+    ) -> Self {
         Self {
             name: name.to_string(),
             display_name: display_name.to_string(),
@@ -128,10 +135,7 @@ impl DropdownSelector {
                 "llama.cpp (Local)",
                 false,
                 "llama3.2",
-                vec![
-                    "llama3.2".to_string(),
-                    "mistral".to_string(),
-                ],
+                vec!["llama3.2".to_string(), "mistral".to_string()],
                 true,
             ),
         ]
@@ -173,8 +177,14 @@ impl DropdownSelector {
     }
 
     pub fn confirm_selection(&mut self) -> (String, String) {
-        let provider = self.selected_provider.clone().unwrap_or_else(|| "anthropic".to_string());
-        let model = self.selected_model.clone().unwrap_or_else(|| "claude-sonnet-4-20250514".to_string());
+        let provider = self
+            .selected_provider
+            .clone()
+            .unwrap_or_else(|| "anthropic".to_string());
+        let model = self
+            .selected_model
+            .clone()
+            .unwrap_or_else(|| "claude-sonnet-4-20250514".to_string());
         self.state = DropdownState::Closed;
         (provider, model)
     }
@@ -195,21 +205,21 @@ impl DropdownSelector {
                 };
 
                 let style = if focused {
-                    Style::default()
-                        .fg(Color::Cyan)
-                        .bold()
+                    Style::default().fg(Color::Cyan).bold()
                 } else {
                     Style::default().fg(Color::White)
                 };
 
                 let block = Block::default()
                     .borders(Borders::ALL)
-                    .border_style(Style::default().fg(if focused { Color::Cyan } else { Color::Gray }))
+                    .border_style(Style::default().fg(if focused {
+                        Color::Cyan
+                    } else {
+                        Color::Gray
+                    }))
                     .title(" Provider ");
 
-                let paragraph = Paragraph::new(display.as_str())
-                    .style(style)
-                    .block(block);
+                let paragraph = Paragraph::new(display.as_str()).style(style).block(block);
 
                 frame.render_widget(paragraph, area);
             }
@@ -225,22 +235,29 @@ impl DropdownSelector {
     }
 
     fn render_provider_list(&self, frame: &mut Frame, area: Rect) {
-        let items: Vec<ListItem> = self.providers.iter().enumerate().map(|(i, p)| {
-            let icon = if p.is_local { "[L]" } else { "[C]" };
-            let api_note = if p.requires_api_key { " *" } else { "" };
-            let selected = if i == self.provider_index { " > " } else { "   " };
-            let content = format!("{}{} {}{}", selected, icon, p.display_name, api_note);
+        let items: Vec<ListItem> = self
+            .providers
+            .iter()
+            .enumerate()
+            .map(|(i, p)| {
+                let icon = if p.is_local { "[L]" } else { "[C]" };
+                let api_note = if p.requires_api_key { " *" } else { "" };
+                let selected = if i == self.provider_index {
+                    " > "
+                } else {
+                    "   "
+                };
+                let content = format!("{}{} {}{}", selected, icon, p.display_name, api_note);
 
-            let style = if i == self.provider_index {
-                Style::default()
-                    .fg(Color::Cyan)
-                    .bold()
-            } else {
-                Style::default().fg(Color::White)
-            };
+                let style = if i == self.provider_index {
+                    Style::default().fg(Color::Cyan).bold()
+                } else {
+                    Style::default().fg(Color::White)
+                };
 
-            ListItem::new(Line::from(Span::styled(content, style)))
-        }).collect();
+                ListItem::new(Line::from(Span::styled(content, style)))
+            })
+            .collect();
 
         let list = List::new(items)
             .block(
@@ -257,25 +274,34 @@ impl DropdownSelector {
 
     fn render_model_list(&self, frame: &mut Frame, area: Rect) {
         if let Some(provider) = self.get_current_provider() {
-            let items: Vec<ListItem> = provider.models.iter().enumerate().map(|(i, m)| {
-                let selected = if i == self.model_index { " > " } else { "   " };
-                let style = if i == self.model_index {
-                    Style::default()
-                        .fg(Color::Cyan)
-                        .bold()
-                } else {
-                    Style::default().fg(Color::White)
-                };
+            let items: Vec<ListItem> = provider
+                .models
+                .iter()
+                .enumerate()
+                .map(|(i, m)| {
+                    let selected = if i == self.model_index { " > " } else { "   " };
+                    let style = if i == self.model_index {
+                        Style::default().fg(Color::Cyan).bold()
+                    } else {
+                        Style::default().fg(Color::White)
+                    };
 
-                ListItem::new(Line::from(Span::styled(format!("{}{}", selected, m), style)))
-            }).collect();
+                    ListItem::new(Line::from(Span::styled(
+                        format!("{}{}", selected, m),
+                        style,
+                    )))
+                })
+                .collect();
 
             let list = List::new(items)
                 .block(
                     Block::default()
                         .borders(Borders::ALL)
                         .border_style(Style::default().fg(Color::Cyan))
-                        .title(format!(" Models for {} (↑↓ to navigate, Enter to confirm, ← Back) ", provider.display_name))
+                        .title(format!(
+                            " Models for {} (↑↓ to navigate, Enter to confirm, ← Back) ",
+                            provider.display_name
+                        ))
                         .title_style(Style::default().fg(Color::Cyan).bold()),
                 )
                 .style(Style::default().bg(Color::Reset));
@@ -285,8 +311,7 @@ impl DropdownSelector {
             // Show API key note if needed
             if provider.requires_api_key {
                 let note = "⚠ API key required. Set ANTHROPIC_API_KEY or OPENAI_API_KEY";
-                let note_para = Paragraph::new(note)
-                    .style(Style::default().fg(Color::Yellow));
+                let note_para = Paragraph::new(note).style(Style::default().fg(Color::Yellow));
                 let note_area = Rect::new(area.x, area.y + area.height - 1, area.width, 1);
                 frame.render_widget(note_para, note_area);
             }
@@ -297,77 +322,71 @@ impl DropdownSelector {
         use crossterm::event::{KeyCode, KeyModifiers};
 
         match self.state {
-            DropdownState::Closed => {
-                match (key.modifiers, key.code) {
-                    (KeyModifiers::NONE, KeyCode::Enter) | (KeyModifiers::NONE, KeyCode::Char('p')) => {
-                        self.state = DropdownState::ProviderSelected;
-                        Some(DropdownAction::OpenProviders)
-                    }
-                    _ => None,
+            DropdownState::Closed => match (key.modifiers, key.code) {
+                (KeyModifiers::NONE, KeyCode::Enter) | (KeyModifiers::NONE, KeyCode::Char('p')) => {
+                    self.state = DropdownState::ProviderSelected;
+                    Some(DropdownAction::OpenProviders)
                 }
-            }
-            DropdownState::ProviderSelected => {
-                match (key.modifiers, key.code) {
-                    (KeyModifiers::NONE, KeyCode::Up) => {
-                        if self.provider_index > 0 {
-                            self.provider_index -= 1;
-                        }
-                        Some(DropdownAction::Navigate)
+                _ => None,
+            },
+            DropdownState::ProviderSelected => match (key.modifiers, key.code) {
+                (KeyModifiers::NONE, KeyCode::Up) => {
+                    if self.provider_index > 0 {
+                        self.provider_index -= 1;
                     }
-                    (KeyModifiers::NONE, KeyCode::Down) => {
-                        if self.provider_index < self.providers.len() - 1 {
-                            self.provider_index += 1;
-                        }
-                        Some(DropdownAction::Navigate)
-                    }
-                    (KeyModifiers::NONE, KeyCode::Enter) => {
-                        self.select_provider(self.provider_index);
-                        if self.needs_api_key() {
-                            self.show_api_key_prompt = true;
-                            Some(DropdownAction::NeedsApiKey)
-                        } else {
-                            Some(DropdownAction::ProviderSelected)
-                        }
-                    }
-                    (KeyModifiers::NONE, KeyCode::Esc) => {
-                        self.state = DropdownState::Closed;
-                        Some(DropdownAction::Close)
-                    }
-                    (KeyModifiers::NONE, KeyCode::Left) => {
-                        self.state = DropdownState::Closed;
-                        Some(DropdownAction::Close)
-                    }
-                    _ => None,
+                    Some(DropdownAction::Navigate)
                 }
-            }
-            DropdownState::ModelSelected => {
-                match (key.modifiers, key.code) {
-                    (KeyModifiers::NONE, KeyCode::Up) => {
-                        if self.model_index > 0 {
-                            self.model_index -= 1;
-                        }
-                        Some(DropdownAction::Navigate)
+                (KeyModifiers::NONE, KeyCode::Down) => {
+                    if self.provider_index < self.providers.len() - 1 {
+                        self.provider_index += 1;
                     }
-                    (KeyModifiers::NONE, KeyCode::Down) => {
-                        if let Some(provider) = self.get_current_provider() {
-                            if self.model_index < provider.models.len() - 1 {
-                                self.model_index += 1;
-                            }
-                        }
-                        Some(DropdownAction::Navigate)
-                    }
-                    (KeyModifiers::NONE, KeyCode::Enter) => {
-                        self.select_model(self.model_index);
-                        let (p, m) = self.confirm_selection();
-                        Some(DropdownAction::Confirmed(p, m))
-                    }
-                    (KeyModifiers::NONE, KeyCode::Esc) | (KeyModifiers::NONE, KeyCode::Left) => {
-                        self.state = DropdownState::ProviderSelected;
-                        Some(DropdownAction::BackToProviders)
-                    }
-                    _ => None,
+                    Some(DropdownAction::Navigate)
                 }
-            }
+                (KeyModifiers::NONE, KeyCode::Enter) => {
+                    self.select_provider(self.provider_index);
+                    if self.needs_api_key() {
+                        self.show_api_key_prompt = true;
+                        Some(DropdownAction::NeedsApiKey)
+                    } else {
+                        Some(DropdownAction::ProviderSelected)
+                    }
+                }
+                (KeyModifiers::NONE, KeyCode::Esc) => {
+                    self.state = DropdownState::Closed;
+                    Some(DropdownAction::Close)
+                }
+                (KeyModifiers::NONE, KeyCode::Left) => {
+                    self.state = DropdownState::Closed;
+                    Some(DropdownAction::Close)
+                }
+                _ => None,
+            },
+            DropdownState::ModelSelected => match (key.modifiers, key.code) {
+                (KeyModifiers::NONE, KeyCode::Up) => {
+                    if self.model_index > 0 {
+                        self.model_index -= 1;
+                    }
+                    Some(DropdownAction::Navigate)
+                }
+                (KeyModifiers::NONE, KeyCode::Down) => {
+                    if let Some(provider) = self.get_current_provider() {
+                        if self.model_index < provider.models.len() - 1 {
+                            self.model_index += 1;
+                        }
+                    }
+                    Some(DropdownAction::Navigate)
+                }
+                (KeyModifiers::NONE, KeyCode::Enter) => {
+                    self.select_model(self.model_index);
+                    let (p, m) = self.confirm_selection();
+                    Some(DropdownAction::Confirmed(p, m))
+                }
+                (KeyModifiers::NONE, KeyCode::Esc) | (KeyModifiers::NONE, KeyCode::Left) => {
+                    self.state = DropdownState::ProviderSelected;
+                    Some(DropdownAction::BackToProviders)
+                }
+                _ => None,
+            },
         }
     }
 }

@@ -88,41 +88,39 @@ impl TabBar {
         let total_tabs = self.tabs.len();
         let tab_width = width / total_tabs;
 
-        let items: Vec<Line> = self.tabs.iter().enumerate().map(|(i, t)| {
-            let is_active = i == self.active_index;
-            let style = if is_active {
-                Style::default()
-                    .fg(Color::Cyan)
-                    .bold()
-            } else {
-                Style::default().fg(Color::Gray)
-            };
+        let items: Vec<Line> = self
+            .tabs
+            .iter()
+            .enumerate()
+            .map(|(i, t)| {
+                let is_active = i == self.active_index;
+                let style = if is_active {
+                    Style::default().fg(Color::Cyan).bold()
+                } else {
+                    Style::default().fg(Color::Gray)
+                };
 
-            let label = format!(" {} {} ", t.icon, t.title);
-            let padded: String = if label.len() < tab_width {
-                let padding = tab_width - label.len();
-                let left_pad = padding / 2;
-                let right_pad = padding - left_pad;
-                format!("{}{}{}", " ".repeat(left_pad), label, " ".repeat(right_pad))
-            } else {
-                label
-            };
+                let label = format!(" {} {} ", t.icon, t.title);
+                let padded: String = if label.len() < tab_width {
+                    let padding = tab_width - label.len();
+                    let left_pad = padding / 2;
+                    let right_pad = padding - left_pad;
+                    format!("{}{}{}", " ".repeat(left_pad), label, " ".repeat(right_pad))
+                } else {
+                    label
+                };
 
-            Line::from(Span::styled(padded, style))
-        }).collect();
+                Line::from(Span::styled(padded, style))
+            })
+            .collect();
 
         // Draw tabs
-        let tabs_para = Paragraph::new(items)
-            .style(Style::default().bg(Color::Black));
+        let tabs_para = Paragraph::new(items).style(Style::default().bg(Color::Black));
 
-        let chunks = Layout::vertical([
-            Constraint::Length(1),
-            Constraint::Min(0),
-        ]).split(area);
+        let chunks = Layout::vertical([Constraint::Length(1), Constraint::Min(0)]).split(area);
 
         // Draw top accent line
-        let top_border = Paragraph::new("")
-            .style(Style::default().bg(Color::Cyan));
+        let top_border = Paragraph::new("").style(Style::default().bg(Color::Cyan));
         frame.render_widget(top_border, Rect::new(area.x, area.y, area.width, 1));
 
         // Draw tabs
@@ -131,9 +129,11 @@ impl TabBar {
         // Draw bottom indicator for active tab
         let indicator_width = tab_width as u16;
         let indicator_x = area.x + (self.active_index as u16 * indicator_width);
-        let indicator = Paragraph::new("")
-            .style(Style::default().fg(Color::Cyan));
-        frame.render_widget(indicator, Rect::new(indicator_x, area.y, indicator_width, 1));
+        let indicator = Paragraph::new("").style(Style::default().fg(Color::Cyan));
+        frame.render_widget(
+            indicator,
+            Rect::new(indicator_x, area.y, indicator_width, 1),
+        );
     }
 
     pub fn handle_key(&mut self, key: crossterm::event::KeyEvent) -> Option<TabAction> {
@@ -257,26 +257,22 @@ impl KanbanBoard {
                 KanbanColumn {
                     title: "In Progress".to_string(),
                     color: Color::Blue,
-                    cards: vec![
-                        KanbanCard {
-                            id: "3".to_string(),
-                            title: "Tabs UI".to_string(),
-                            description: "Modern tab interface".to_string(),
-                            priority: Priority::High,
-                        },
-                    ],
+                    cards: vec![KanbanCard {
+                        id: "3".to_string(),
+                        title: "Tabs UI".to_string(),
+                        description: "Modern tab interface".to_string(),
+                        priority: Priority::High,
+                    }],
                 },
                 KanbanColumn {
                     title: "Done".to_string(),
                     color: Color::Green,
-                    cards: vec![
-                        KanbanCard {
-                            id: "4".to_string(),
-                            title: "Router".to_string(),
-                            description: "7-layer policy engine".to_string(),
-                            priority: Priority::Low,
-                        },
-                    ],
+                    cards: vec![KanbanCard {
+                        id: "4".to_string(),
+                        title: "Router".to_string(),
+                        description: "7-layer policy engine".to_string(),
+                        priority: Priority::Low,
+                    }],
                 },
             ],
             selected_column: 0,
@@ -303,37 +299,44 @@ impl KanbanBoard {
             // Column header text
             let header = Paragraph::new(Line::from(vec![
                 Span::styled(" ", Style::default().fg(Color::Reset)),
-                Span::styled(&column.title, Style::default()
-                    .fg(Color::White)
-                    .bold()),
-                Span::styled(format!(" ({})", column.cards.len()), Style::default().fg(Color::Gray)),
+                Span::styled(&column.title, Style::default().fg(Color::White).bold()),
+                Span::styled(
+                    format!(" ({})", column.cards.len()),
+                    Style::default().fg(Color::Gray),
+                ),
             ]))
             .style(Style::default().bg(Color::DarkGray));
             frame.render_widget(header, header_area);
 
             // Cards
-            let card_area = Rect::new(col_area.x, col_area.y + 1, col_area.width, col_area.height - 1);
-            let cards_text: Vec<Line> = column.cards.iter().enumerate().map(|(j, card)| {
-                let is_selected = i == self.selected_column && j == self.selected_card;
-                let style = if is_selected {
-                    Style::default()
-                        .fg(Color::Cyan)
-                        .bold()
-                } else {
-                    Style::default().fg(Color::White)
-                };
+            let card_area = Rect::new(
+                col_area.x,
+                col_area.y + 1,
+                col_area.width,
+                col_area.height - 1,
+            );
+            let cards_text: Vec<Line> = column
+                .cards
+                .iter()
+                .enumerate()
+                .map(|(j, card)| {
+                    let is_selected = i == self.selected_column && j == self.selected_card;
+                    let style = if is_selected {
+                        Style::default().fg(Color::Cyan).bold()
+                    } else {
+                        Style::default().fg(Color::White)
+                    };
 
-                let priority_style = Style::default()
-                    .fg(card.priority.color())
-                    .bold();
+                    let priority_style = Style::default().fg(card.priority.color()).bold();
 
-                Line::from(vec![
-                    Span::styled("│ ", Style::default().fg(Color::DarkGray)),
-                    Span::styled(card.priority.icon(), priority_style),
-                    Span::styled(" ", Style::default()),
-                    Span::styled(&card.title, style),
-                ])
-            }).collect();
+                    Line::from(vec![
+                        Span::styled("│ ", Style::default().fg(Color::DarkGray)),
+                        Span::styled(card.priority.icon(), priority_style),
+                        Span::styled(" ", Style::default()),
+                        Span::styled(&card.title, style),
+                    ])
+                })
+                .collect();
 
             let cards_para = Paragraph::new(cards_text)
                 .wrap(Wrap { trim: true })
@@ -375,9 +378,7 @@ impl KanbanBoard {
                 }
                 Some(KanbanAction::Moved)
             }
-            (KeyModifiers::NONE, KeyCode::Enter) => {
-                Some(KanbanAction::SelectedCard)
-            }
+            (KeyModifiers::NONE, KeyCode::Enter) => Some(KanbanAction::SelectedCard),
             _ => None,
         }
     }

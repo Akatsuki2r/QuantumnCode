@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use crate::config::settings::Settings;
 use crate::config::themes::Theme;
 use crate::providers::Provider;
-use crate::tui::widgets::{DropdownSelector, TabBar, KanbanBoard};
+use crate::tui::widgets::{DropdownSelector, KanbanBoard, TabBar};
 
 /// Current mode of the application
 #[derive(Debug, Clone, PartialEq)]

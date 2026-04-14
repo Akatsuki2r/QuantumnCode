@@ -13,7 +13,9 @@ pub mod provider_trait;
 pub use anthropic::AnthropicProvider;
 pub use llama_cpp::LlamaCppProvider;
 pub use lm_studio::LmStudioProvider;
-pub use local_discover::{discover_all_models, format_size, get_all_models, LocalModel, LocalModelConfig};
+pub use local_discover::{
+    discover_all_models, format_size, get_all_models, LocalModel, LocalModelConfig,
+};
 pub use ollama::OllamaProvider;
 pub use openai::OpenAIProvider;
 pub use provider_trait::{Message, Provider, ProviderError, Role, StreamChunk};

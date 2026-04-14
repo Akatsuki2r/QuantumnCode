@@ -118,9 +118,7 @@ fn list_openai_models() {
 
 fn list_ollama_models() {
     // Try to detect actual Ollama models
-    let output = std::process::Command::new("ollama")
-        .args(["list"])
-        .output();
+    let output = std::process::Command::new("ollama").args(["list"]).output();
 
     match output {
         Ok(out) if out.status.success() => {

@@ -49,7 +49,8 @@ fn main() -> Result<()> {
     // This runs in the background and doesn't block startup
     let _ = std::thread::spawn(|| {
         let config = providers::discover_all_models();
-        tracing::debug!("Discovered {} Ollama models, {} LM Studio models, {} llama.cpp models",
+        tracing::debug!(
+            "Discovered {} Ollama models, {} LM Studio models, {} llama.cpp models",
             config.ollama.len(),
             config.lm_studio.len(),
             config.llama_cpp.len()

@@ -44,10 +44,10 @@ pub fn render(frame: &mut Frame, app: &App) {
 
     // Create main layout with tabs
     let chunks = Layout::vertical([
-        Constraint::Length(3),  // Tab bar
-        Constraint::Length(1),  // Status bar
-        Constraint::Min(1),     // Main content
-        Constraint::Length(3),  // Input
+        Constraint::Length(3), // Tab bar
+        Constraint::Length(1), // Status bar
+        Constraint::Min(1),    // Main content
+        Constraint::Length(3), // Input
     ])
     .split(frame.area());
 
@@ -85,7 +85,11 @@ pub fn render(frame: &mut Frame, app: &App) {
 }
 
 /// Render the dropdown overlay for provider/model selection
-fn render_dropdown_overlay(frame: &mut Frame, app: &App, colors: &crate::config::themes::RatatuiColors) {
+fn render_dropdown_overlay(
+    frame: &mut Frame,
+    app: &App,
+    colors: &crate::config::themes::RatatuiColors,
+) {
     // Create a centered modal area for dropdown
     let area = center_rect(60, 20, frame.area());
     let bg = Block::default()
@@ -165,9 +169,7 @@ fn render_chat(
         .iter()
         .flat_map(|msg| {
             let role_style = match msg.role.as_str() {
-                "user" => Style::default()
-                    .fg(colors.accent)
-                    .bold(),
+                "user" => Style::default().fg(colors.accent).bold(),
                 "assistant" => Style::default().fg(colors.success),
                 _ => Style::default().fg(colors.muted),
             };
@@ -224,7 +226,10 @@ fn render_input(
             Block::default()
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(colors.border))
-                .title(Span::styled(provider_text, Style::default().fg(colors.accent)))
+                .title(Span::styled(
+                    provider_text,
+                    Style::default().fg(colors.accent),
+                ))
                 .title_style(Style::default().fg(colors.accent)),
         );
 
@@ -249,16 +254,12 @@ fn render_help(
     let help_text = vec![
         Line::from(Span::styled(
             "Quantumn Code - Help",
-            Style::default()
-                .fg(colors.accent)
-                .bold(),
+            Style::default().fg(colors.accent).bold(),
         )),
         Line::default(),
         Line::from(Span::styled(
             "Keyboard Shortcuts:",
-            Style::default()
-                .fg(colors.secondary)
-                .bold(),
+            Style::default().fg(colors.secondary).bold(),
         )),
         Line::from("  Enter       - Send message"),
         Line::from("  Ctrl+C      - Quit"),
@@ -276,9 +277,7 @@ fn render_help(
         Line::default(),
         Line::from(Span::styled(
             "Commands:",
-            Style::default()
-                .fg(colors.secondary)
-                .bold(),
+            Style::default().fg(colors.secondary).bold(),
         )),
         Line::from("  /help       - Show help"),
         Line::from("  /clear      - Clear conversation"),
@@ -429,10 +428,11 @@ fn render_kanban_tab(
 ) {
     // Header
     let header = Paragraph::new(Line::from(vec![
-        Span::styled(" Kanban Board ", Style::default()
-            .fg(colors.accent)
-            .bold()),
-        Span::styled(" - Use arrow keys to navigate, Enter to select ", Style::default().fg(colors.muted)),
+        Span::styled(" Kanban Board ", Style::default().fg(colors.accent).bold()),
+        Span::styled(
+            " - Use arrow keys to navigate, Enter to select ",
+            Style::default().fg(colors.muted),
+        ),
     ]))
     .style(Style::default().bg(colors.background));
 
@@ -454,9 +454,7 @@ fn render_settings_tab(
     let settings_text = vec![
         Line::from(Span::styled(
             "Settings",
-            Style::default()
-                .fg(colors.accent)
-                .bold(),
+            Style::default().fg(colors.accent).bold(),
         )),
         Line::default(),
         Line::from(format!("Provider: {}", app.session.provider)),
@@ -464,10 +462,27 @@ fn render_settings_tab(
         Line::from(format!("Theme: {}", app.settings.ui.theme)),
         Line::default(),
         Line::from(Span::styled("API Keys:", Style::default().bold())),
-        Line::from(format!("  Anthropic: {}", if *app.api_keys.get("anthropic").unwrap_or(&false) { "✓ Set" } else { "✗ Not set" })),
-        Line::from(format!("  OpenAI: {}", if *app.api_keys.get("openai").unwrap_or(&false) { "✓ Set" } else { "✗ Not set" })),
+        Line::from(format!(
+            "  Anthropic: {}",
+            if *app.api_keys.get("anthropic").unwrap_or(&false) {
+                "✓ Set"
+            } else {
+                "✗ Not set"
+            }
+        )),
+        Line::from(format!(
+            "  OpenAI: {}",
+            if *app.api_keys.get("openai").unwrap_or(&false) {
+                "✓ Set"
+            } else {
+                "✗ Not set"
+            }
+        )),
         Line::default(),
-        Line::from(Span::styled("Press P to change provider/model", Style::default().fg(colors.muted))),
+        Line::from(Span::styled(
+            "Press P to change provider/model",
+            Style::default().fg(colors.muted),
+        )),
     ];
 
     let paragraph = Paragraph::new(settings_text)
