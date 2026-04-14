@@ -45,6 +45,17 @@ fn main() -> Result<()> {
         )
         .init();
 
+    // Run model discovery on startup to cache available local models
+    // This runs in the background and doesn't block startup
+    let _ = std::thread::spawn(|| {
+        let config = providers::discover_all_models();
+        tracing::debug!("Discovered {} Ollama models, {} LM Studio models, {} llama.cpp models",
+            config.ollama.len(),
+            config.lm_studio.len(),
+            config.llama_cpp.len()
+        );
+    });
+
     // Run the CLI
     let rt = tokio::runtime::Runtime::new()?;
     rt.block_on(async { run(cli).await })

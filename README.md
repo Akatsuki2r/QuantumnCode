@@ -165,16 +165,62 @@ quantumn model llama_cpp
 
 ### 2. Start Using
 
+**For Cloud Providers (Claude, OpenAI):**
+
 ```bash
-# Interactive mode (recommended for long sessions)
+# Set your API key
+export ANTHROPIC_API_KEY=sk-ant-...   # for Claude
+export OPENAI_API_KEY=sk-...         # for GPT
+
+# Interactive mode
 quantumn
 
-# One-shot queries
-quantumn chat "Explain this code: $(cat src/main.rs)"
-quantumn edit src/lib.rs --prompt "Add comprehensive error handling"
-quantumn commit  # Generate commit from staged changes
-quantumn review src/**/*.rs  # AI-powered code review
+# Quick query
+quantumn chat "Explain this code"
 ```
+
+**For Local Models (Ollama, LM Studio, llama.cpp):**
+
+```bash
+# Option A: Ollama (easiest)
+curl https://ollama.ai/install.sh | sh
+ollama serve
+ollama pull llama3.2
+quantumn model ollama
+
+# Option B: LM Studio (GUI-based)
+# 1. Download from https://lmstudio.ai
+# 2. Download a model (e.g., llama3.2)
+# 3. Click "Start Server" button
+# 4. Run: quantumn model lm_studio
+
+# Option C: llama.cpp (manual)
+# 1. Build llama.cpp: git clone https://github.com/ggerganov/llama.cpp && cd llama.cpp && make
+# 2. Download GGUF model to ~/.config/quantumn-code/models/
+# 3. Configure in config.toml:
+quantumn model llama_cpp
+```
+
+### First-Time Setup
+
+1. **Choose your provider:**
+   ```bash
+   quantumn model list  # See available models
+   quantumn model <provider_name>  # Set provider
+   ```
+
+2. **Configure local models:**
+   ```bash
+   # Edit config file
+   quantumn config edit
+   ```
+
+3. **Enable shell completions (optional but recommended):**
+   ```bash
+   quantumn completions bash >> ~/.bashrc
+   source ~/.bashrc
+   # Now press Tab for auto-complete!
+   ```
 
 ---
 
@@ -237,19 +283,16 @@ quantumn config get model.provider         # Get specific value
 quantumn config set ui.theme oxidized      # Set theme
 quantumn config set model.default_model claude-sonnet-4-20250514
 
-# Themes
-quantumn theme list                        # List available themes
-quantumn theme set oxidized                # Set theme
-quantumn theme current                     # Show current theme
-quantumn theme preview tokyo_night         # Preview theme
+# Local Model Discovery
+quantumn model list                        # List all models (auto-detects installed)
+quantumn model ollama                       # Show/check Ollama models
+quantumn model lm_studio                    # Show/check LM Studio models
+quantumn model llama_cpp                   # Show llama.cpp models
 
-# Models
-quantumn model list                        # List all models
-quantumn model                             # Show current model
-quantumn model anthropic                   # Switch to Claude
-quantumn model openai                      # Switch to OpenAI
-quantumn model ollama                      # Switch to Ollama
-quantumn model llama_cpp                   # Switch to llama.cpp
+# Shell Completions (recommended!)
+quantumn completions bash >> ~/.bashrc     # Bash
+quantumn completions zsh > ~/.zsh/completions/_quantumn  # Zsh
+source ~/.bashrc                           # Reload shell
 
 # Other
 quantumn status                            # Show system status
@@ -257,6 +300,36 @@ quantumn version                           # Show version
 quantumn help                              # Show comprehensive help
 quantumn help providers                    # Provider setup guide
 quantumn help commands                     # Command reference
+```
+
+### Local Model Setup
+
+**Ollama:**
+```bash
+ollama serve                    # Start Ollama server
+ollama pull llama3.2           # Download a model
+ollama list                     # List installed models
+quantumn model ollama           # Switch to Ollama provider
+```
+
+**LM Studio:**
+```bash
+# GUI method:
+# 1. Download from https://lmstudio.ai
+# 2. Download a model through the app
+# 3. Click "Start Server" (Local Inference -> Server)
+# CLI method:
+lms server start               # Start LM Studio server
+quantumn model lm_studio       # Switch to LM Studio provider
+```
+
+**llama.cpp:**
+```bash
+# Build llama.cpp server
+git clone https://github.com/ggerganov/llama.cpp
+cd llama.cpp && mkdir build && cd build && cmake .. && make -j4
+# Download a GGUF model and configure
+quantumn model llama_cpp       # Switch to llama.cpp provider
 ```
 
 ### Keyboard Shortcuts (TUI)

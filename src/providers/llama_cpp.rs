@@ -174,6 +174,18 @@ impl LlamaCppProvider {
         self.prompt_format = format;
     }
 
+    /// Add a model path mapping (for models from config)
+    pub fn add_model_path(&mut self, name: String, path: PathBuf) {
+        // Also add to supervisor's model paths if using supervisor
+        if let Ok(mut sup) = self.supervisor.try_lock() {
+            sup.add_model_path(name.clone(), path);
+        }
+        // Add to local models list if not already present
+        if !self.models.contains(&name) {
+            self.models.push(name);
+        }
+    }
+
     /// Detect prompt format from model name
     fn detect_format(&self, model: &str) -> PromptFormat {
         let model_lower = model.to_lowercase();

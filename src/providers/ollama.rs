@@ -138,15 +138,31 @@ impl Provider for OllamaProvider {
     }
 
     fn models(&self) -> Vec<String> {
-        // Return common models, actual list should be fetched from Ollama
+        // Note: This returns a fallback list. For actual model detection,
+        // use list_models() async method which queries the Ollama API.
+        // The hardcoded list is only for cases where Ollama is not running.
         vec![
             "llama3.2".to_string(),
             "llama3.1".to_string(),
             "llama3".to_string(),
             "mistral".to_string(),
+            "mistral-nemo".to_string(),
             "codellama".to_string(),
             "deepseek-coder".to_string(),
+            "deepseek-coder-v2".to_string(),
             "qwen2.5-coder".to_string(),
+            "qwen2.5".to_string(),
+            "phi3".to_string(),
+            "phi3-mini".to_string(),
+            "gemma2".to_string(),
+            "gemma2-9b".to_string(),
+            "starcoder2".to_string(),
+            "codestral".to_string(),
+            "wizardcoder".to_string(),
+            "wizardlm2".to_string(),
+            "llava".to_string(),
+            "mixtral".to_string(),
+            "command-r-plus".to_string(),
         ]
     }
 

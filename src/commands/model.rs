@@ -117,25 +117,63 @@ fn list_openai_models() {
 }
 
 fn list_ollama_models() {
-    // Note: Auto-detection of Ollama models requires async runtime
-    // Falling back to common models list
-    // To see installed models, run: ollama list
-    println!("  llama3.2       - Meta Llama 3.2");
-    println!("  llama3.1       - Meta Llama 3.1");
-    println!("  mistral        - Mistral");
-    println!("  codellama      - Code Llama");
-    println!("  deepseek-coder - DeepSeek Coder");
-    println!("  qwen2.5-coder  - Qwen 2.5 Coder");
+    // Try to detect actual Ollama models
+    let output = std::process::Command::new("ollama")
+        .args(["list"])
+        .output();
+
+    match output {
+        Ok(out) if out.status.success() => {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            println!("  Installed Ollama models:");
+            // Skip header line
+            for line in stdout.lines().skip(1) {
+                let line = line.trim();
+                if line.is_empty() {
+                    continue;
+                }
+                // Parse NAME SIZE MODIFIED
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if !parts.is_empty() {
+                    println!("  {}", parts[0]);
+                }
+            }
+        }
+        _ => {
+            println!("  Ollama not running or no models installed.");
+            println!("  Common models (not installed):");
+            println!("  llama3.2       - Meta Llama 3.2");
+            println!("  llama3.1       - Meta Llama 3.1");
+            println!("  mistral        - Mistral");
+            println!("  codellama      - Code Llama");
+            println!("  deepseek-coder - DeepSeek Coder");
+            println!("  qwen2.5-coder  - Qwen 2.5 Coder");
+            println!();
+            println!("  Install: ollama pull <model_name>");
+        }
+    }
     println!();
     println!("  Note: Run 'ollama list' to see installed models.");
     println!("  Or use 'quantumn agent --auto-detect' to auto-detect local LLMs");
 }
 
 fn list_llama_cpp_models() {
+    println!("  Configured models from settings:");
+    if let Ok(settings) = crate::config::Settings::load() {
+        if settings.llama_cpp.model_paths.is_empty() {
+            println!("  (none configured - add to [llama_cpp.model_paths] in config.toml)");
+        } else {
+            for (name, path) in &settings.llama_cpp.model_paths {
+                println!("  {} -> {}", name, path);
+            }
+        }
+    }
+    println!();
+    println!("  Common models:");
     println!("  llama3.2      - Meta Llama 3.2 (GGUF)");
-    println!("  llama3.1       - Meta Llama 3.1 (GGUF)");
-    println!("  mistral        - Mistral (GGUF)");
-    println!("  qwen2.5        - Qwen 2.5 (GGUF)");
+    println!("  llama3.1      - Meta Llama 3.1 (GGUF)");
+    println!("  mistral      - Mistral (GGUF)");
+    println!("  qwen2.5      - Qwen 2.5 (GGUF)");
     println!("  deepseek-coder - DeepSeek Coder (GGUF)");
     println!();
     println!("  Requires llama-server binary and GGUF model files.");
@@ -143,15 +181,44 @@ fn list_llama_cpp_models() {
 }
 
 fn list_lm_studio_models() {
-    println!("  llama3.2       - Meta Llama 3.2 (GGUF)");
-    println!("  llama3.1        - Meta Llama 3.1 (GGUF)");
-    println!("  mistral         - Mistral (GGUF)");
-    println!("  qwen2.5         - Qwen 2.5 (GGUF)");
-    println!("  granite-3.0-2b  - IBM Granite 3.0 2B (GGUF)");
+    // Try to scan LM Studio models directory
+    let home = std::env::var("HOME").unwrap_or_else(|_| "~".to_string());
+    let models_dir = std::path::PathBuf::from(format!("{}/.lmstudio/models", home));
+    let mut found_any = false;
+
+    if models_dir.exists() {
+        if let Ok(entries) = std::fs::read_dir(&models_dir) {
+            for entry in entries.flatten() {
+                if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                    if let Ok(sub) = std::fs::read_dir(entry.path()) {
+                        for sub_entry in sub.flatten() {
+                            if sub_entry
+                                .path()
+                                .extension()
+                                .map(|e| e == "gguf")
+                                .unwrap_or(false)
+                            {
+                                let name = sub_entry.file_name().to_string_lossy().to_string();
+                                if let Ok(meta) = std::fs::metadata(&sub_entry.path()) {
+                                    let size_mb = meta.len() as f64 / (1024.0 * 1024.0);
+                                    println!("  {} ({:.1} MB)", name, size_mb);
+                                    found_any = true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if !found_any {
+        println!("  No GGUF models found in ~/.lmstudio/models/");
+    }
     println!();
     println!("  LM Studio manages models directly.");
     println!("  Start LM Studio server: lms server start");
-    println!("  Models are auto-discovered from LM Studio library.");
+    println!("  Or download models through LM Studio application.");
 }
 
 /// Set current provider
