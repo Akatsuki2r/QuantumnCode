@@ -117,6 +117,9 @@ fn list_openai_models() {
 }
 
 fn list_ollama_models() {
+    // Note: Auto-detection of Ollama models requires async runtime
+    // Falling back to common models list
+    // To see installed models, run: ollama list
     println!("  llama3.2       - Meta Llama 3.2");
     println!("  llama3.1       - Meta Llama 3.1");
     println!("  mistral        - Mistral");
@@ -124,7 +127,8 @@ fn list_ollama_models() {
     println!("  deepseek-coder - DeepSeek Coder");
     println!("  qwen2.5-coder  - Qwen 2.5 Coder");
     println!();
-    println!("  Run 'ollama list' to see installed models.");
+    println!("  Note: Run 'ollama list' to see installed models.");
+    println!("  Or use 'quantumn agent --auto-detect' to auto-detect local LLMs");
 }
 
 fn list_llama_cpp_models() {

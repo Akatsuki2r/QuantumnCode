@@ -5,6 +5,7 @@
 pub mod app;
 pub mod event;
 pub mod render;
+pub mod widgets;
 
 pub use render::TuiApp;
 

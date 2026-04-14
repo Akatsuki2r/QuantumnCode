@@ -49,11 +49,47 @@ fn handle_key_event(app: &mut App, key: crossterm::event::KeyEvent) -> Result<bo
             return Ok(false);
         }
 
-        // Escape - return to normal mode
+        // Open provider selector
+        (KeyModifiers::NONE, KeyCode::Char('p')) => {
+            app.mode = Mode::ProviderSelect;
+            return Ok(false);
+        }
+
+        // Escape - return to normal mode or close dropdown
         (KeyModifiers::NONE, KeyCode::Esc) => {
-            if app.mode != Mode::Normal {
+            if matches!(app.mode, Mode::ProviderSelect) {
+                app.mode = Mode::Normal;
+            } else if app.mode != Mode::Normal {
                 app.mode = Mode::Normal;
             }
+            return Ok(false);
+        }
+
+        // Tab switching
+        (KeyModifiers::NONE, KeyCode::Left) | (KeyModifiers::NONE, KeyCode::Right) => {
+            if key.code == KeyCode::Left {
+                app.tab_bar.previous();
+            } else {
+                app.tab_bar.next();
+            }
+            return Ok(false);
+        }
+
+        // Number keys for direct tab access
+        (KeyModifiers::NONE, KeyCode::Char('1')) => {
+            app.tab_bar.select(0);
+            return Ok(false);
+        }
+        (KeyModifiers::NONE, KeyCode::Char('2')) => {
+            app.tab_bar.select(1);
+            return Ok(false);
+        }
+        (KeyModifiers::NONE, KeyCode::Char('3')) => {
+            app.tab_bar.select(2);
+            return Ok(false);
+        }
+        (KeyModifiers::NONE, KeyCode::Char('4')) => {
+            app.tab_bar.select(3);
             return Ok(false);
         }
 
@@ -67,6 +103,7 @@ fn handle_key_event(app: &mut App, key: crossterm::event::KeyEvent) -> Result<bo
         Mode::Editing => handle_editing_mode(app, key),
         Mode::Review => handle_review_mode(app, key),
         Mode::Command => handle_command_mode(app, key),
+        Mode::ProviderSelect => handle_provider_select_mode(app, key),
     }
 }
 
@@ -452,5 +489,39 @@ fn handle_command_mode(app: &mut App, key: crossterm::event::KeyEvent) -> Result
             Ok(false)
         }
         _ => Ok(false),
+    }
+}
+
+/// Handle provider/model selection mode
+fn handle_provider_select_mode(app: &mut App, key: crossterm::event::KeyEvent) -> Result<bool> {
+    use crate::tui::widgets::DropdownAction;
+
+    match app.dropdown.handle_key(key) {
+        Some(DropdownAction::Confirmed(provider, model)) => {
+            app.session.provider = provider;
+            app.session.model = model;
+            app.mode = Mode::Normal;
+            app.add_message("system", &format!("Switched to {} with model {}", app.session.provider, app.session.model));
+            Ok(false)
+        }
+        Some(DropdownAction::Close) => {
+            app.mode = Mode::Normal;
+            Ok(false)
+        }
+        Some(DropdownAction::NeedsApiKey) => {
+            // TODO: Prompt for API key
+            app.add_message("system", "API key required. Set ANTHROPIC_API_KEY or OPENAI_API_KEY environment variable.");
+            Ok(false)
+        }
+        Some(DropdownAction::ProviderSelected) => {
+            Ok(false)
+        }
+        Some(DropdownAction::BackToProviders) => {
+            Ok(false)
+        }
+        Some(DropdownAction::Navigate) | Some(DropdownAction::OpenProviders) => {
+            Ok(false)
+        }
+        None => Ok(false),
     }
 }

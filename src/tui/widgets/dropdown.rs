@@ -2,7 +2,7 @@
 
 use ratatui::{
     prelude::*,
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Scrollbar, ScrollbarState},
+    widgets::{Block, Borders, List, ListItem, Paragraph},
 };
 
 /// Provider info for display
@@ -43,7 +43,6 @@ pub struct DropdownSelector {
     pub state: DropdownState,
     pub provider_index: usize,
     pub model_index: usize,
-    pub scroll_state: ScrollbarState,
     pub selected_provider: Option<String>,
     pub selected_model: Option<String>,
     pub show_api_key_prompt: bool,
@@ -57,7 +56,6 @@ impl DropdownSelector {
             state: DropdownState::Closed,
             provider_index: 0,
             model_index: 0,
-            scroll_state: ScrollbarState::new(0),
             selected_provider: None,
             selected_model: None,
             show_api_key_prompt: false,
@@ -145,20 +143,32 @@ impl DropdownSelector {
 
     pub fn select_provider(&mut self, index: usize) {
         if index < self.providers.len() {
+            let default_model = self.providers[index].default_model.clone();
             self.provider_index = index;
             self.selected_provider = Some(self.providers[index].name.clone());
             self.model_index = 0;
-            self.selected_model = Some(self.providers[index].default_model.clone());
+            self.selected_model = Some(default_model);
             self.state = DropdownState::ModelSelected;
         }
     }
 
     pub fn select_model(&mut self, index: usize) {
-        if let Some(provider) = self.get_current_provider() {
-            if index < provider.models.len() {
-                self.model_index = index;
-                self.selected_model = Some(provider.models[index].clone());
+        // Get the current provider and models outside of the borrow
+        let models: Vec<String>;
+        let provider_opt;
+
+        {
+            provider_opt = self.providers.get(self.provider_index);
+            if let Some(p) = provider_opt {
+                models = p.models.clone();
+            } else {
+                return;
             }
+        }
+
+        if index < models.len() {
+            self.model_index = index;
+            self.selected_model = Some(models[index].clone());
         }
     }
 
@@ -187,7 +197,7 @@ impl DropdownSelector {
                 let style = if focused {
                     Style::default()
                         .fg(Color::Cyan)
-                        .add_modifier(Modifier::BOLD)
+                        .bold()
                 } else {
                     Style::default().fg(Color::White)
                 };
@@ -224,7 +234,7 @@ impl DropdownSelector {
             let style = if i == self.provider_index {
                 Style::default()
                     .fg(Color::Cyan)
-                    .add_modifier(Modifier::BOLD)
+                    .bold()
             } else {
                 Style::default().fg(Color::White)
             };
@@ -238,7 +248,7 @@ impl DropdownSelector {
                     .borders(Borders::ALL)
                     .border_style(Style::default().fg(Color::Cyan))
                     .title(" Select Provider (↑↓ to navigate, Enter to select, Esc to close) ")
-                    .title_style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                    .title_style(Style::default().fg(Color::Cyan).bold()),
             )
             .style(Style::default().bg(Color::Reset));
 
@@ -252,7 +262,7 @@ impl DropdownSelector {
                 let style = if i == self.model_index {
                     Style::default()
                         .fg(Color::Cyan)
-                        .add_modifier(Modifier::BOLD)
+                        .bold()
                 } else {
                     Style::default().fg(Color::White)
                 };
@@ -266,7 +276,7 @@ impl DropdownSelector {
                         .borders(Borders::ALL)
                         .border_style(Style::default().fg(Color::Cyan))
                         .title(format!(" Models for {} (↑↓ to navigate, Enter to confirm, ← Back) ", provider.display_name))
-                        .title_style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                        .title_style(Style::default().fg(Color::Cyan).bold()),
                 )
                 .style(Style::default().bg(Color::Reset));
 

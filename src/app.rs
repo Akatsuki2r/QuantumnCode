@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use crate::config::settings::Settings;
 use crate::config::themes::Theme;
 use crate::providers::Provider;
+use crate::tui::widgets::{DropdownSelector, TabBar, KanbanBoard};
 
 /// Current mode of the application
 #[derive(Debug, Clone, PartialEq)]
@@ -20,6 +21,8 @@ pub enum Mode {
     Help,
     /// Command palette
     Command,
+    /// Provider/model selection
+    ProviderSelect,
 }
 
 /// A single message in the conversation
@@ -91,6 +94,12 @@ pub struct App {
     pub providers: Vec<Box<dyn Provider>>,
     /// API key status
     pub api_keys: HashMap<String, bool>,
+    /// Dropdown selector for providers/models
+    pub dropdown: DropdownSelector,
+    /// Tab bar
+    pub tab_bar: TabBar,
+    /// Kanban board
+    pub kanban: KanbanBoard,
 }
 
 impl App {
@@ -120,6 +129,9 @@ impl App {
             status: None,
             providers: Vec::new(),
             api_keys: HashMap::new(),
+            dropdown: DropdownSelector::new(),
+            tab_bar: TabBar::new(),
+            kanban: KanbanBoard::new(),
         }
     }
 
