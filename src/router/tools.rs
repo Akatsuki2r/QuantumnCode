@@ -28,7 +28,9 @@ pub fn pick_tools(intent: Intent, mode: AgentMode) -> ToolPolicy {
 fn build_mode_tools(intent: Intent) -> ToolPolicy {
     match intent {
         // Destructive operations require confirmation
-        Intent::Delete | Intent::Bash => ToolPolicy::with_confirmation(ToolPolicy::default_policy()),
+        Intent::Delete | Intent::Bash => {
+            ToolPolicy::with_confirmation(ToolPolicy::default_policy())
+        }
         // Git operations also need confirmation
         Intent::Git => ToolPolicy::with_confirmation(ToolPolicy::default_policy()),
         // Everything else is fine
@@ -53,15 +55,8 @@ fn debug_mode_tools() -> ToolPolicy {
 /// Tools for plan mode
 fn plan_mode_tools() -> ToolPolicy {
     ToolPolicy {
-        allowed_tools: vec![
-            "Read".to_string(),
-            "Grep".to_string(),
-            "Glob".to_string(),
-        ],
-        disallowed_tools: vec![
-            "Write".to_string(),
-            "Bash".to_string(),
-        ],
+        allowed_tools: vec!["Read".to_string(), "Grep".to_string(), "Glob".to_string()],
+        disallowed_tools: vec!["Write".to_string(), "Bash".to_string()],
         require_confirmation: false,
     }
 }
@@ -81,10 +76,7 @@ fn chat_mode_tools() -> ToolPolicy {
 }
 
 /// Filter a list of tool names against a policy
-pub fn filter_tools_by_policy<'a>(
-    tool_names: &'a [&str],
-    policy: &ToolPolicy,
-) -> Vec<&'a str> {
+pub fn filter_tools_by_policy<'a>(tool_names: &'a [&str], policy: &ToolPolicy) -> Vec<&'a str> {
     tool_names
         .iter()
         .filter(|name| policy.is_tool_allowed(name))

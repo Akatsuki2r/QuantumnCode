@@ -12,20 +12,38 @@ const INTENT_PATTERNS: &[(&str, Intent)] = &[
     (r"^(?i)(?:read|view|show|cat|open|get)\s+\S+", Intent::Read),
     (r"^(?i)(?:write|create|new|touch)\s+\S+", Intent::Write),
     (r"^(?i)(?:edit|modify|update|change)\s+\S+", Intent::Edit),
-    (r"^(?i)(?:delete|remove|rm|del|unlink)\s+\S+", Intent::Delete),
+    (
+        r"^(?i)(?:delete|remove|rm|del|unlink)\s+\S+",
+        Intent::Delete,
+    ),
     // Shell operations
-    (r"^(?i)(?:run|exec|execute|bash|shell|cmd|sh)\s+", Intent::Bash),
-    (r"^(?i)(?:git|commit|push|pull|branch|merge|checkout|clone)\s*", Intent::Git),
+    (
+        r"^(?i)(?:run|exec|execute|bash|shell|cmd|sh)\s+",
+        Intent::Bash,
+    ),
+    (
+        r"^(?i)(?:git|commit|push|pull|branch|merge|checkout|clone)\s*",
+        Intent::Git,
+    ),
     // Search operations
     (r"^(?i)(?:grep|rg|search|find|rip)\s+", Intent::Grep),
     (r"^(?i)(?:glob|find files)", Intent::Glob),
     (r"^(?i)(?:find|locate)\s+(?:file|path)", Intent::Find),
     // Analysis operations
-    (r"^(?i)(?:explain|what is|how does|tell me about|describe)\s+", Intent::Explain),
+    (
+        r"^(?i)(?:explain|what is|how does|tell me about|describe)\s+",
+        Intent::Explain,
+    ),
     (r"^(?i)(?:review|check|analyze|audit)\s+", Intent::Review),
-    (r"^(?i)(?:debug|debugger|breakpoint|trace|inspect)\s+", Intent::Debug),
+    (
+        r"^(?i)(?:debug|debugger|breakpoint|trace|inspect)\s+",
+        Intent::Debug,
+    ),
     // Planning operations
-    (r"^(?i)(?:plan|design|architecture|decompose)\s+", Intent::Plan),
+    (
+        r"^(?i)(?:plan|design|architecture|decompose)\s+",
+        Intent::Plan,
+    ),
     (r"^(?i)(?:design|architect|blueprint)\s+", Intent::Design),
     // Meta operations
     (r"^(?i)(?:help|\?|usage|commands|man)\s*$", Intent::Help),
@@ -74,15 +92,27 @@ const COMPLEXITY_KEYWORDS: &[(&str, i32)] = &[
     (r"(?i)\b(?:file|path|dir|directory)\b", 1),
     // Moderate indicators
     (r"(?i)\b(?:write|create|edit|modify|update)\b", 2),
-    (r"(?i)\b(?:function|method|class|module|struct|enum|trait)\b", 2),
+    (
+        r"(?i)\b(?:function|method|class|module|struct|enum|trait)\b",
+        2,
+    ),
     (r"(?i)\b(?:test|spec|assert|expect)\b", 2),
     // Complex indicators
     (r"(?i)\b(?:refactor|optimize|migrate|port|convert)\b", 3),
-    (r"(?i)\b(?:algorithm|data structure|performance|cache|concurrency)\b", 3),
+    (
+        r"(?i)\b(?:algorithm|data structure|performance|cache|concurrency)\b",
+        3,
+    ),
     (r"(?i)\b(?:api|rest|graphql|protocol|network)\b", 3),
     // Heavy indicators (most complex)
-    (r"(?i)\b(?:security|authentication|authorization|encryption)\b", 4),
-    (r"(?i)\b(?:architecture|microservice|distributed|system design)\b", 4),
+    (
+        r"(?i)\b(?:security|authentication|authorization|encryption)\b",
+        4,
+    ),
+    (
+        r"(?i)\b(?:architecture|microservice|distributed|system design)\b",
+        4,
+    ),
     (r"(?i)\b(?:machine learning|ai|llm|neural|transformer)\b", 4),
     (r"(?i)\b(?:full.stack|multi.platform|integration)\b", 4),
 ];
@@ -105,10 +135,7 @@ pub fn score_complexity(prompt: &str) -> Complexity {
     let matches: Vec<usize> = COMPLEXITY_REGEX_SET.matches(prompt).into_iter().collect();
 
     // Sum weights of all matched patterns
-    let score: i32 = matches
-        .iter()
-        .map(|idx| COMPLEXITY_KEYWORDS[*idx].1)
-        .sum();
+    let score: i32 = matches.iter().map(|idx| COMPLEXITY_KEYWORDS[*idx].1).sum();
 
     // Clamp to 0-4 range
     let score = score.clamp(0, 4);
@@ -128,10 +155,10 @@ pub fn estimate_file_scope(prompt: &str) -> usize {
 
     // Count file path indicators
     let file_indicators = [
-        r"\S+\.\S+",       // file.extension
-        r"src/",            // src directory
-        r"lib/",            // lib directory
-        r"tests?/",         // test directories
+        r"\S+\.\S+", // file.extension
+        r"src/",     // src directory
+        r"lib/",     // lib directory
+        r"tests?/",  // test directories
     ];
 
     let count = file_indicators
@@ -141,8 +168,13 @@ pub fn estimate_file_scope(prompt: &str) -> usize {
 
     // Also check for multi-file keywords
     let multi_file_keywords = [
-        "all files", "multiple files", "every file", "entire",
-        "whole codebase", "all source", "recursive",
+        "all files",
+        "multiple files",
+        "every file",
+        "entire",
+        "whole codebase",
+        "all source",
+        "recursive",
     ];
 
     let multi_count = multi_file_keywords

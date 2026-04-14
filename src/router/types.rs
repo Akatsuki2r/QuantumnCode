@@ -292,15 +292,8 @@ impl ToolPolicy {
     /// Read-only tool policy
     pub fn read_only() -> Self {
         Self {
-            allowed_tools: vec![
-                "Read".to_string(),
-                "Grep".to_string(),
-                "Glob".to_string(),
-            ],
-            disallowed_tools: vec![
-                "Write".to_string(),
-                "Bash".to_string(),
-            ],
+            allowed_tools: vec!["Read".to_string(), "Grep".to_string(), "Glob".to_string()],
+            disallowed_tools: vec!["Write".to_string(), "Bash".to_string()],
             require_confirmation: false,
         }
     }

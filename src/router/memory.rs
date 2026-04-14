@@ -5,11 +5,7 @@
 use crate::router::types::{AgentMode, Complexity, Intent, MemoryPolicy};
 
 /// Pick the memory loading policy
-pub fn pick_memory_policy(
-    intent: Intent,
-    complexity: Complexity,
-    mode: AgentMode,
-) -> MemoryPolicy {
+pub fn pick_memory_policy(intent: Intent, complexity: Complexity, mode: AgentMode) -> MemoryPolicy {
     // Trivial tasks don't need memory
     if complexity == Complexity::Trivial {
         return MemoryPolicy::None;

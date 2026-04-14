@@ -7,10 +7,10 @@ mod executor;
 mod parser;
 mod tools;
 
+pub use crate::router::{route, RouterConfig, RoutingDecision};
 pub use executor::{run_agentic, AgentExecutor};
 pub use parser::parse_tool_calls;
 pub use tools::{Tool, ToolCall, ToolResult};
-pub use crate::router::{route, RouterConfig, RoutingDecision};
 
 /// System prompt for agentic mode
 pub const AGENT_SYSTEM_PROMPT: &str = r#"

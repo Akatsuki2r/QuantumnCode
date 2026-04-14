@@ -25,13 +25,13 @@
 //! println!("Tools: {:?}", decision.tools.allowed_tools);
 //! ```
 
-pub mod types;
 pub mod analyzer;
 pub mod context;
 pub mod memory;
 pub mod mode;
 pub mod model;
 pub mod tools;
+pub mod types;
 
 // Re-export main types
 pub use types::{
@@ -44,7 +44,9 @@ pub use analyzer::{classify_intent, score_complexity};
 pub use context::pick_budget;
 pub use memory::pick_memory_policy;
 pub use mode::{can_transition, get_mode_display, get_mode_instruction, pick_mode, transition};
-pub use model::{estimate_cost_per_1k, get_model_for_tier, pick_model_tier, tier_supports_streaming};
+pub use model::{
+    estimate_cost_per_1k, get_model_for_tier, pick_model_tier, tier_supports_streaming,
+};
 pub use tools::{filter_tools_by_policy, pick_tools};
 
 /// Main routing function - pure, no side effects

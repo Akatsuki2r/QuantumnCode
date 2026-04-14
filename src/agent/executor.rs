@@ -47,7 +47,9 @@ impl AgentExecutor {
     pub async fn run(&mut self, provider: &dyn Provider) -> Result<String> {
         // Initialize routing on first iteration if not set
         if self.routing.is_none() {
-            let user_msg = self.messages.last()
+            let user_msg = self
+                .messages
+                .last()
                 .filter(|m| m.role == Role::User)
                 .map(|m| m.content.clone())
                 .unwrap_or_default();
@@ -116,7 +118,9 @@ impl AgentExecutor {
             let filtered_calls: Vec<ToolCall> = tool_calls
                 .into_iter()
                 .filter(|call| {
-                    allowed.iter().any(|t| t.to_lowercase() == call.name.to_lowercase())
+                    allowed
+                        .iter()
+                        .any(|t| t.to_lowercase() == call.name.to_lowercase())
                 })
                 .collect();
 

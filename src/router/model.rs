@@ -57,9 +57,9 @@ pub fn tier_supports_streaming(_tier: ModelTier) -> bool {
 /// Estimate cost per 1K tokens for a tier
 pub fn estimate_cost_per_1k(tier: ModelTier) -> f64 {
     match tier {
-        ModelTier::Local => 0.0,           // No API cost
-        ModelTier::Fast => 0.25,           // Haiku pricing
-        ModelTier::Standard => 1.0,        // Sonnet pricing
-        ModelTier::Capable => 3.0,         // Opus pricing
+        ModelTier::Local => 0.0,    // No API cost
+        ModelTier::Fast => 0.25,    // Haiku pricing
+        ModelTier::Standard => 1.0, // Sonnet pricing
+        ModelTier::Capable => 3.0,  // Opus pricing
     }
 }
