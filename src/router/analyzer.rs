@@ -26,7 +26,7 @@ const INTENT_PATTERNS: &[(&str, Intent)] = &[
         Intent::Git,
     ),
     // Search operations
-    (r"^(?i)(?:grep|rg|search|find|rip)\s+", Intent::Grep),
+    (r"^(?i)(?:grep|rg|search|rip)\s+", Intent::Grep),
     (r"^(?i)(?:glob|find files)", Intent::Glob),
     (r"^(?i)(?:find|locate)\s+(?:file|path)", Intent::Find),
     // Analysis operations
@@ -304,5 +304,92 @@ mod tests {
             score_complexity("design a distributed microservices architecture with authentication"),
             Complexity::Heavy
         );
+    }
+
+    // Additional comprehensive tests
+    #[test]
+    fn test_intent_classification_comprehensive() {
+        // Test all 16 intents
+        assert_eq!(classify_intent("read src/main.rs"), Intent::Read);
+        assert_eq!(classify_intent("write new_test.rs"), Intent::Write);
+        assert_eq!(classify_intent("edit config.toml"), Intent::Edit);
+        assert_eq!(classify_intent("delete temp.txt"), Intent::Delete);
+        assert_eq!(classify_intent("run cargo build"), Intent::Bash);
+        assert_eq!(classify_intent("exec npm install"), Intent::Bash);
+        assert_eq!(classify_intent("git status"), Intent::Git);
+        assert_eq!(classify_intent("git commit -m 'fix'"), Intent::Git);
+        assert_eq!(classify_intent("grep pattern file"), Intent::Grep);
+        assert_eq!(classify_intent("rg pattern src/"), Intent::Grep);
+        assert_eq!(classify_intent("glob **/*.rs"), Intent::Glob);
+        assert_eq!(classify_intent("find path/to/file"), Intent::Find);
+        assert_eq!(classify_intent("explain this code"), Intent::Explain);
+        assert_eq!(classify_intent("what is a mutex"), Intent::Explain);
+        assert_eq!(classify_intent("review the PR"), Intent::Review);
+        assert_eq!(classify_intent("check the code"), Intent::Review);
+        assert_eq!(classify_intent("debug segfault"), Intent::Debug);
+        assert_eq!(classify_intent("trace the flow"), Intent::Debug);
+        assert_eq!(classify_intent("plan the architecture"), Intent::Plan);
+        // "design" matches Plan pattern first (higher priority in pattern list)
+        assert_eq!(classify_intent("design architecture"), Intent::Plan);
+        assert_eq!(classify_intent("help"), Intent::Help);
+        assert_eq!(classify_intent("hi"), Intent::Chat);
+        // "hello there" doesn't match because pattern requires just "hello" at end
+        assert_eq!(classify_intent("hello there"), Intent::Unknown);
+    }
+
+    #[test]
+    fn test_intent_priority_first_match_wins() {
+        // "read" should match before other patterns
+        assert_eq!(classify_intent("read src/main.rs"), Intent::Read);
+        // "write" should match before generic patterns
+        assert_eq!(classify_intent("write test.rs"), Intent::Write);
+    }
+
+    #[test]
+    fn test_complexity_scoring_comprehensive() {
+        // Trivial: system commands
+        assert_eq!(score_complexity("ls"), Complexity::Trivial);
+        assert_eq!(score_complexity("pwd"), Complexity::Trivial);
+        assert_eq!(score_complexity("date"), Complexity::Trivial);
+        assert_eq!(score_complexity("whoami"), Complexity::Trivial);
+        assert_eq!(score_complexity("trivia"), Complexity::Trivial);
+
+        // Simple: read/list operations
+        assert!(score_complexity("cat file.txt") <= Complexity::Simple);
+        assert!(score_complexity("list all files") <= Complexity::Simple);
+
+        // Moderate: write/edit operations
+        assert!(score_complexity("write new file") >= Complexity::Moderate);
+        assert!(score_complexity("edit config") >= Complexity::Moderate);
+
+        // Complex: refactor/optimize
+        assert!(score_complexity("refactor") >= Complexity::Complex);
+        assert!(score_complexity("optimize performance") >= Complexity::Complex);
+
+        // Heavy: security/architecture
+        assert!(score_complexity("security audit") >= Complexity::Heavy);
+        assert!(score_complexity("design system architecture") >= Complexity::Heavy);
+    }
+
+    #[test]
+    fn test_file_scope_estimation() {
+        // No file paths
+        assert_eq!(estimate_file_scope("hello"), 0);
+
+        // With file paths
+        assert!(estimate_file_scope("read src/main.rs") >= 1);
+        assert!(estimate_file_scope("edit src/lib.rs src/other.rs") >= 2);
+
+        // Multi-file keywords
+        assert!(estimate_file_scope("refactor all files") >= 1);
+        assert!(estimate_file_scope("optimize entire codebase") >= 1); // "entire" + "codebase" = 2 keywords
+    }
+
+    #[test]
+    fn test_empty_prompt_handling() {
+        assert_eq!(classify_intent(""), Intent::Unknown);
+        assert_eq!(classify_intent("   "), Intent::Unknown);
+        assert_eq!(score_complexity(""), Complexity::Simple); // empty defaults to Simple
+        assert_eq!(score_complexity("   "), Complexity::Simple);
     }
 }

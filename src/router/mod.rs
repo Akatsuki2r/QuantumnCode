@@ -133,15 +133,19 @@ fn calculate_confidence(intent: Intent, complexity: Complexity) -> f32 {
     confidence.min(1.0)
 }
 
+// Include comprehensive integration tests
 #[cfg(test)]
-mod tests {
+mod tests;
+
+// Legacy inline tests (kept for backward compatibility)
+#[cfg(test)]
+mod legacy_tests {
     use super::*;
 
     #[test]
     fn test_route_read() {
         let config = RouterConfig::default();
         let decision = route("read src/main.rs", "/project", &config);
-
         assert!(matches!(decision.intent, Intent::Read));
         assert!(decision.complexity <= Complexity::Simple);
         assert!(decision.tools.is_tool_allowed("Read"));
@@ -151,7 +155,6 @@ mod tests {
     fn test_route_write() {
         let config = RouterConfig::default();
         let decision = route("write new_feature.rs", "/project", &config);
-
         assert!(matches!(decision.intent, Intent::Write));
         assert!(matches!(decision.mode, AgentMode::Build));
         assert!(decision.tools.is_tool_allowed("Write"));
@@ -161,7 +164,6 @@ mod tests {
     fn test_route_plan() {
         let config = RouterConfig::default();
         let decision = route("plan a microservices architecture", "/project", &config);
-
         assert!(matches!(decision.intent, Intent::Plan));
         assert!(matches!(decision.mode, AgentMode::Plan));
         assert!(decision.tools.is_tool_allowed("Read"));
@@ -172,7 +174,6 @@ mod tests {
     fn test_route_git() {
         let config = RouterConfig::default();
         let decision = route("git commit -m 'fix bug'", "/project", &config);
-
         assert!(matches!(decision.intent, Intent::Git));
         assert!(matches!(decision.mode, AgentMode::Build));
         assert!(decision.tools.require_confirmation);
@@ -182,7 +183,6 @@ mod tests {
     fn test_route_explain() {
         let config = RouterConfig::default();
         let decision = route("what is a mutex?", "/project", &config);
-
         assert!(matches!(decision.intent, Intent::Explain));
         assert!(matches!(decision.mode, AgentMode::Chat));
     }
@@ -195,7 +195,6 @@ mod tests {
             "/project",
             &config,
         );
-
         assert!(decision.complexity >= Complexity::Complex);
         assert!(matches!(decision.model_tier, ModelTier::Capable));
     }
@@ -204,9 +203,7 @@ mod tests {
     fn test_route_prefer_local() {
         let mut config = RouterConfig::default();
         config.prefer_local = true;
-
         let decision = route("read src/main.rs", "/project", &config);
-
         assert!(matches!(decision.model_tier, ModelTier::Local));
     }
 }

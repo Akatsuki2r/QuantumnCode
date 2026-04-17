@@ -161,7 +161,7 @@ impl AgentMode {
 // =============================================================================
 
 /// ModelTier - capability level for model selection
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ModelTier {
     /// Ollama/llama.cpp - no API cost
@@ -387,6 +387,48 @@ impl RoutingDecision {
 // Router Configuration
 // =============================================================================
 
+/// RAG configuration for retrieval-augmented generation
+#[derive(Debug, Clone)]
+pub struct RagRouterConfig {
+    /// Enable RAG retrieval
+    pub enabled: bool,
+    /// Maximum context chunks to retrieve
+    pub max_chunks: usize,
+    /// Similarity threshold (0.0 - 1.0)
+    pub similarity_threshold: f32,
+}
+
+impl Default for RagRouterConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            max_chunks: 5,
+            similarity_threshold: 0.3,
+        }
+    }
+}
+
+/// Prompt compaction configuration
+#[derive(Debug, Clone)]
+pub struct PromptCompactionConfig {
+    /// Enable automatic prompt compaction
+    pub enabled: bool,
+    /// Target token budget
+    pub target_tokens: usize,
+    /// Remove filler words
+    pub remove_filler: bool,
+}
+
+impl Default for PromptCompactionConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            target_tokens: 1000,
+            remove_filler: true,
+        }
+    }
+}
+
 /// RouterConfig - configuration for routing behavior
 #[derive(Debug, Clone)]
 pub struct RouterConfig {
@@ -394,6 +436,10 @@ pub struct RouterConfig {
     pub prefer_local: bool,
     /// Maximum cost per million tokens
     pub cost_limit: f32,
+    /// RAG configuration
+    pub rag: RagRouterConfig,
+    /// Prompt compaction configuration
+    pub prompt_compaction: PromptCompactionConfig,
 }
 
 impl Default for RouterConfig {
@@ -401,6 +447,8 @@ impl Default for RouterConfig {
         Self {
             prefer_local: false,
             cost_limit: 1.0,
+            rag: RagRouterConfig::default(),
+            prompt_compaction: PromptCompactionConfig::default(),
         }
     }
 }

@@ -63,3 +63,77 @@ pub fn estimate_cost_per_1k(tier: ModelTier) -> f64 {
         ModelTier::Capable => 3.0,  // Opus pricing
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_pick_model_tier_complexity() {
+        let config = RouterConfig::default();
+
+        // Heavy tasks need Capable
+        assert_eq!(pick_model_tier(Complexity::Heavy, Intent::Read, AgentMode::Chat, &config), ModelTier::Capable);
+        assert_eq!(pick_model_tier(Complexity::Complex, Intent::Read, AgentMode::Chat, &config), ModelTier::Capable);
+    }
+
+    #[test]
+    fn test_pick_model_tier_planning() {
+        let config = RouterConfig::default();
+
+        // Plan/Design intent gets Standard
+        assert_eq!(pick_model_tier(Complexity::Simple, Intent::Plan, AgentMode::Chat, &config), ModelTier::Standard);
+        assert_eq!(pick_model_tier(Complexity::Simple, Intent::Design, AgentMode::Chat, &config), ModelTier::Standard);
+    }
+
+    #[test]
+    fn test_pick_model_tier_review_debug() {
+        let config = RouterConfig::default();
+
+        // Review/Debug get Standard
+        assert_eq!(pick_model_tier(Complexity::Simple, Intent::Review, AgentMode::Chat, &config), ModelTier::Standard);
+        assert_eq!(pick_model_tier(Complexity::Simple, Intent::Debug, AgentMode::Chat, &config), ModelTier::Standard);
+    }
+
+    #[test]
+    fn test_pick_model_tier_simple() {
+        let config = RouterConfig::default();
+
+        // Simple tasks get Fast (or Local if prefer_local)
+        assert_eq!(pick_model_tier(Complexity::Simple, Intent::Read, AgentMode::Chat, &config), ModelTier::Fast);
+        assert_eq!(pick_model_tier(Complexity::Trivial, Intent::Read, AgentMode::Chat, &config), ModelTier::Fast);
+    }
+
+    #[test]
+    fn test_pick_model_tier_prefer_local() {
+        let mut config = RouterConfig::default();
+        config.prefer_local = true;
+
+        assert_eq!(pick_model_tier(Complexity::Simple, Intent::Read, AgentMode::Chat, &config), ModelTier::Local);
+    }
+
+    #[test]
+    fn test_get_model_for_tier() {
+        assert_eq!(get_model_for_tier(ModelTier::Local), "llama3.2:latest");
+        assert_eq!(get_model_for_tier(ModelTier::Fast), "claude-haiku-4-20250514");
+        assert_eq!(get_model_for_tier(ModelTier::Standard), "claude-sonnet-4-20250514");
+        assert_eq!(get_model_for_tier(ModelTier::Capable), "claude-opus-4-20250514");
+    }
+
+    #[test]
+    fn test_estimate_cost_per_1k() {
+        assert_eq!(estimate_cost_per_1k(ModelTier::Local), 0.0);
+        assert_eq!(estimate_cost_per_1k(ModelTier::Fast), 0.25);
+        assert_eq!(estimate_cost_per_1k(ModelTier::Standard), 1.0);
+        assert_eq!(estimate_cost_per_1k(ModelTier::Capable), 3.0);
+    }
+
+    #[test]
+    fn test_tier_supports_streaming() {
+        // All tiers support streaming
+        assert!(tier_supports_streaming(ModelTier::Local));
+        assert!(tier_supports_streaming(ModelTier::Fast));
+        assert!(tier_supports_streaming(ModelTier::Standard));
+        assert!(tier_supports_streaming(ModelTier::Capable));
+    }
+}
