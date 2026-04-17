@@ -269,9 +269,10 @@ mod tests {
 
     #[test]
     fn test_parse_size() {
-        assert_eq!(parse_size("4.7GB"), Some(4_700_000_000));
-        assert_eq!(parse_size("1.2MB"), Some(1_200_000));
-        assert_eq!(parse_size("500KB"), Some(500_000));
+        // 4.7GB in binary (GiB) = 4.7 * 1024^3 = 5046586572
+        assert_eq!(parse_size("4.7GB"), Some(5046586572));
+        assert_eq!(parse_size("1.2MB"), Some(1258291)); // 1.2 * 1024^2
+        assert_eq!(parse_size("500KB"), Some(512000)); // 500 * 1024
     }
 
     #[test]
