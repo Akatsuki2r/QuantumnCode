@@ -2,6 +2,7 @@
 
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
+use std::time::Instant;
 
 use crate::config::settings::Settings;
 use crate::config::themes::Theme;
@@ -11,20 +12,14 @@ use crate::tui::widgets::{DropdownSelector, KanbanBoard, TabBar};
 use ratatui::widgets::ListState;
 
 /// Current mode of the application
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Mode {
-    /// Normal input mode
-    Normal,
-    /// Editing a file
-    Editing,
-    /// Reviewing changes
-    Review,
-    /// Help screen
-    Help,
-    /// Command palette
+    /// Default chat interaction mode
+    Chat,
+    /// Command palette or slash command interaction
     Command,
-    /// Provider/model selection
-    ProviderSelect,
+    /// Focused on a specific task or full-screen overlay (e.g., help, focus work)
+    Focus,
 }
 
 /// A single message in the conversation
@@ -98,20 +93,30 @@ pub struct App {
     pub api_keys: HashMap<String, bool>,
     /// Dropdown selector for providers/models
     pub dropdown: DropdownSelector,
-    /// Tab bar
-    pub tab_bar: TabBar,
-    /// Kanban board
-    pub kanban: KanbanBoard,
     /// Router configuration for automatic model selection
     pub router_config: RouterConfig,
     /// Whether automatic model switching via router is enabled
     pub router_enabled: bool,
     /// Debug log messages (circular buffer, latest 100)
     pub debug_logs: Vec<(std::time::Instant, String)>,
-    /// Whether debug console is visible
-    pub debug_visible: bool,
-    /// State for the debug log list (for auto-scrolling)
-    pub debug_state: ListState,
+    /// Input buffer for the command palette
+    pub command_palette_input: String,
+    /// Cursor position in command palette input
+    pub command_palette_cursor_position: usize,
+    /// Whether the command palette is active
+    pub command_palette_active: bool,
+    /// Last routing duration for diagnostics
+    pub last_routing_duration: Option<std::time::Duration>,
+    /// History of user inputs for the chat
+    pub input_history: Vec<String>,
+    /// Current position in history navigation
+    pub history_index: Option<usize>,
+    /// Whether to automatically scroll to the bottom
+    pub auto_scroll: bool,
+    /// Current git branch
+    pub git_branch: Option<String>,
+    /// Last time the git branch was checked
+    pub last_git_check: Instant,
 }
 
 impl App {
@@ -133,7 +138,7 @@ impl App {
                 provider: "anthropic".to_string(),
                 model: "claude-sonnet-4-20250514".to_string(),
             },
-            mode: Mode::Normal,
+            mode: Mode::Chat,
             should_quit: false,
             input: String::new(),
             cursor_position: 0,
@@ -142,34 +147,64 @@ impl App {
             providers: Vec::new(),
             api_keys: HashMap::new(),
             dropdown: DropdownSelector::new(),
-            tab_bar: TabBar::new(),
-            kanban: KanbanBoard::new(),
             router_config: RouterConfig::default(),
             router_enabled: true,
             debug_logs: Vec::new(),
-            debug_visible: false,
-            debug_state: ListState::default(),
+            command_palette_input: String::new(),
+            command_palette_cursor_position: 0,
+            command_palette_active: false,
+            last_routing_duration: None,
+            input_history: Vec::new(),
+            history_index: None,
+            auto_scroll: true,
+            git_branch: Self::get_git_branch(),
+            last_git_check: Instant::now(),
         }
+    }
+
+    /// Update git branch if enough time has passed (30s throttle)
+    pub fn update_git_status(&mut self) {
+        if self.last_git_check.elapsed().as_secs() > 30 {
+            self.git_branch = Self::get_git_branch();
+            self.last_git_check = Instant::now();
+        }
+    }
+
+    fn get_git_branch() -> Option<String> {
+        std::process::Command::new("git")
+            .args(["rev-parse", "--abbrev-ref", "HEAD"])
+            .output()
+            .ok()
+            .and_then(|output| {
+                if output.status.success() {
+                    let branch = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                    if branch.is_empty() { None } else { Some(branch) }
+                } else {
+                    None
+                }
+            })
     }
 
     /// Add a debug log entry
     pub fn debug_log(&mut self, message: &str) {
-        use std::time::Instant;
         self.debug_logs.push((Instant::now(), message.to_string()));
         // Keep only last 100 entries
         if self.debug_logs.len() > 100 {
             self.debug_logs.remove(0);
         }
-
-        // Auto-scroll to the bottom
-        let last_idx = self.debug_logs.len().saturating_sub(1);
-        self.debug_state.select(Some(last_idx));
-        tracing::debug!(target: "debug_console", "{}", message);
+        tracing::debug!(target: "debug_console", "{}", message); // Always log to tracing
     }
 
-    /// Toggle debug console visibility
-    pub fn toggle_debug(&mut self) {
-        self.debug_visible = !self.debug_visible;
+    /// Toggle command palette visibility
+    pub fn toggle_command_palette(&mut self) {
+        self.command_palette_active = !self.command_palette_active;
+        if self.command_palette_active {
+            self.mode = Mode::Command;
+            self.command_palette_input.clear();
+            self.command_palette_cursor_position = 0;
+        } else {
+            self.mode = Mode::Chat;
+        }
     }
 
     /// Route a prompt through the router and automatically select model
@@ -250,6 +285,7 @@ impl App {
             timestamp: Utc::now(),
             tokens: None,
         });
+        self.auto_scroll = true;
         self.session.updated = Utc::now();
     }
 
