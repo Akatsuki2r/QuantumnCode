@@ -172,10 +172,13 @@ pub struct Settings {
     /// UI configuration
     pub ui: UIConfig,
     /// Custom keybindings
+    #[serde(default)]
     pub keybindings: std::collections::HashMap<String, String>,
     /// llama.cpp configuration
+    #[serde(default)]
     pub llama_cpp: LlamaCppConfig,
     /// LM Studio configuration
+    #[serde(default)]
     pub lm_studio: LmStudioConfig,
 }
 

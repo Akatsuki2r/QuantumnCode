@@ -273,13 +273,19 @@ impl OllamaProvider {
     /// Tries API first, then CLI, then filesystem scan
     /// Returns (models_list, detailed_info, is_running)
     pub fn detect_models_comprehensive() -> (Vec<String>, Vec<OllamaModelDetail>, bool) {
-        let provider = Self::new();
-
         // Method 1: Try API (most reliable, gives detailed info)
-        let rt = tokio::runtime::Handle::current();
-        let api_result = rt.block_on(async { provider.list_models_detailed().await });
+        // Spawn a new thread with its own runtime to avoid blocking the current one
+        let handle = std::thread::spawn(|| {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("Failed to create runtime");
+            let provider = Self::new();
+            rt.block_on(async { provider.list_models_detailed().await })
+        });
+        let api_result = handle.join().ok().and_then(|r| r.ok());
 
-        if let Ok(models) = api_result {
+        if let Some(models) = api_result {
             let names: Vec<String> = models.iter().map(|m| m.name.clone()).collect();
             tracing::debug!("Detected {} Ollama models via API", names.len());
             return (names, models, true);

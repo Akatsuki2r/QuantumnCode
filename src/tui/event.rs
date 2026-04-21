@@ -437,11 +437,11 @@ Config file: ~/.config/quantumn-code/config.toml",
                 let mut lines = vec![
                     format!("╔════════════════════════════════════════════════════════════════╗"),
                     format!(
-                        "║ OLLAMA MODELS {}                                ║",
+                        "║ OLLAMA MODELS {:<16}                                ║",
                         if is_running {
-                            "(Server Running)  "
+                            "(Server Running)"
                         } else {
-                            "(Server Offline) "
+                            "(Server Offline)"
                         }
                     ),
                     format!("╠════════════════════════════════════════════════════════════════╣"),
