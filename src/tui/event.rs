@@ -1,6 +1,8 @@
 //! Event handling for the TUI
 
-use crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers};
+use crate::providers::{ProviderError, StreamChunk};
+use crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers, MouseEventKind};
+use futures::{Stream, StreamExt};
 use std::time::Duration;
 
 use crate::app::{App, Mode};
@@ -8,6 +10,9 @@ use color_eyre::eyre::Result;
 
 /// Handle all events (async for AI responses)
 pub async fn handle_events(app: &mut App) -> Result<bool> {
+    // Background maintenance
+    app.update_git_status();
+
     if crossterm::event::poll(Duration::from_millis(100))? {
         match crossterm::event::read()? {
             Event::Key(key) => {
@@ -15,6 +20,17 @@ pub async fn handle_events(app: &mut App) -> Result<bool> {
                     return handle_key_event(app, key).await;
                 }
             }
+            Event::Mouse(mouse) => match mouse.kind {
+                MouseEventKind::ScrollUp => {
+                    app.auto_scroll = false;
+                    app.scroll_offset = app.scroll_offset.saturating_sub(3);
+                }
+                MouseEventKind::ScrollDown => {
+                    app.auto_scroll = false;
+                    app.scroll_offset += 3;
+                }
+                _ => {}
+            },
             Event::Resize(_, _) => {
                 // Terminal resized, will be handled on next render
             }
@@ -36,80 +52,159 @@ async fn handle_key_event(app: &mut App, key: crossterm::event::KeyEvent) -> Res
         }
 
         // Clear screen
-        (KeyModifiers::CONTROL, KeyCode::Char('l')) => {
-            app.clear_conversation();
+        (KeyModifiers::CONTROL, KeyCode::Char('l')) if matches!(app.mode, Mode::Chat) => {
+            app.clear_conversation(); // Only clear chat if in chat mode
             return Ok(false);
         }
 
         // Toggle help
         (KeyModifiers::NONE, KeyCode::F(1)) => {
             app.mode = match app.mode {
-                Mode::Help => Mode::Normal,
-                _ => Mode::Help,
+                Mode::Chat => Mode::Focus, // Temporarily use Focus for help overlay
+                Mode::Focus => Mode::Chat,
+                _ => Mode::Chat, // Fallback
             };
             return Ok(false);
         }
 
-        // Open provider selector — immediately show provider list
-        (KeyModifiers::NONE, KeyCode::Char('p')) if !matches!(app.mode, Mode::ProviderSelect) => {
-            app.dropdown.open();
-            app.mode = Mode::ProviderSelect;
+        // Command Palette (Ctrl+K)
+        (KeyModifiers::CONTROL, KeyCode::Char('k')) => {
+            app.toggle_command_palette();
             return Ok(false);
         }
 
-        // Escape — close dropdown or return to normal
+        // Provider Selector (Ctrl+P)
+        (KeyModifiers::CONTROL, KeyCode::Char('p')) => {
+            app.open_dropdown();
+            return Ok(false);
+        }
+
+        // Escape — close command palette or return to chat
         (KeyModifiers::NONE, KeyCode::Esc) => {
-            if matches!(app.mode, Mode::ProviderSelect) {
-                app.dropdown.close();
-                app.mode = Mode::Normal;
-            } else if app.mode != Mode::Normal {
-                app.mode = Mode::Normal;
+            if app.command_palette_active {
+                app.toggle_command_palette();
+                app.mode = Mode::Chat;
+            } else if app.mode != Mode::Chat {
+                app.mode = Mode::Chat; // Exit any focus mode
             }
-            return Ok(false);
-        }
-
-        // Tab switching (only when not in provider select)
-        (KeyModifiers::NONE, KeyCode::Left) | (KeyModifiers::NONE, KeyCode::Right)
-            if !matches!(app.mode, Mode::ProviderSelect) =>
-        {
-            if key.code == KeyCode::Left {
-                app.tab_bar.previous();
-            } else {
-                app.tab_bar.next();
-            }
-            return Ok(false);
-        }
-
-        // Number keys for direct tab access (only outside dropdown)
-        (KeyModifiers::NONE, KeyCode::Char('1')) if !matches!(app.mode, Mode::ProviderSelect) => {
-            app.tab_bar.select(0);
-            return Ok(false);
-        }
-        (KeyModifiers::NONE, KeyCode::Char('2')) if !matches!(app.mode, Mode::ProviderSelect) => {
-            app.tab_bar.select(1);
-            return Ok(false);
-        }
-        (KeyModifiers::NONE, KeyCode::Char('3')) if !matches!(app.mode, Mode::ProviderSelect) => {
-            app.tab_bar.select(2);
-            return Ok(false);
-        }
-        (KeyModifiers::NONE, KeyCode::Char('4')) if !matches!(app.mode, Mode::ProviderSelect) => {
-            app.tab_bar.select(3);
             return Ok(false);
         }
 
         _ => {}
     }
 
-    // Mode-specific handling (all async now)
+    // Dropdown handling - takes priority when open
+    use crate::tui::widgets::{DropdownAction, DropdownState};
+    if !matches!(app.dropdown.state, DropdownState::Closed) {
+        if let Some(action) = app.dropdown.handle_key(key) {
+            match action {
+                DropdownAction::ProviderSelected => {
+                    // Provider selected, now show models
+                    app.set_status(Some("Select a model...".to_string()));
+                }
+                DropdownAction::Confirmed(provider, model) => {
+                    let provider_clone = provider.clone();
+                    let model_clone = model.clone();
+                    app.session.provider = provider;
+                    app.session.model = model;
+                    app.set_status(Some(format!("Using {}: {}", provider_clone, model_clone)));
+                    app.debug_log(&format!(
+                        "Provider/model changed: {} -> {}",
+                        provider_clone, model_clone
+                    ));
+                }
+                DropdownAction::NeedsApiKey => {
+                    app.set_status(Some(
+                        "API key required - set environment variable".to_string(),
+                    ));
+                }
+                DropdownAction::Close => {
+                    app.set_status(None);
+                }
+                _ => {}
+            }
+            return Ok(false);
+        }
+        return Ok(false);
+    }
+
+    // Mode-specific handling
     match app.mode {
-        Mode::Normal => handle_normal_mode(app, key).await,
-        Mode::Help => handle_help_mode(app, key),
-        Mode::Editing => handle_editing_mode(app, key),
-        Mode::Review => handle_review_mode(app, key),
-        Mode::Command => handle_command_mode(app, key),
-        // Dropdown consumes ALL remaining keys when open
-        Mode::ProviderSelect => handle_provider_select_mode(app, key),
+        Mode::Chat => handle_chat_mode(app, key).await,
+        Mode::Command => handle_command_palette_mode(app, key).await,
+        Mode::Focus => handle_focus_mode(app, key), // For help overlay, editing, etc.
+    }
+}
+
+/// Handle command palette mode
+async fn handle_command_palette_mode(
+    app: &mut App,
+    key: crossterm::event::KeyEvent,
+) -> Result<bool> {
+    match (key.modifiers, key.code) {
+        (KeyModifiers::NONE, KeyCode::Enter) => {
+            if !app.command_palette_input.is_empty() {
+                let command_input = app.command_palette_input.clone();
+                app.toggle_command_palette(); // Close palette before executing
+                app.mode = Mode::Chat; // Return to chat mode
+                app.input = format!("/{}", command_input); // Prepare for slash command execution
+                handle_slash_command(app)?; // Execute the command
+            }
+            Ok(false)
+        }
+        (KeyModifiers::NONE, KeyCode::Char(c)) => {
+            app.command_palette_input
+                .insert(app.command_palette_cursor_position, c);
+            app.command_palette_cursor_position += c.len_utf8();
+            Ok(false)
+        }
+        (KeyModifiers::NONE, KeyCode::Backspace) => {
+            if app.command_palette_cursor_position > 0 {
+                app.command_palette_cursor_position -= 1;
+                app.command_palette_input
+                    .remove(app.command_palette_cursor_position);
+            }
+            Ok(false)
+        }
+        (KeyModifiers::NONE, KeyCode::Delete) => {
+            if app.command_palette_cursor_position < app.command_palette_input.len() {
+                app.command_palette_input
+                    .remove(app.command_palette_cursor_position);
+            }
+            Ok(false)
+        }
+        (KeyModifiers::NONE, KeyCode::Left) => {
+            if app.command_palette_cursor_position > 0 {
+                app.command_palette_cursor_position -= 1;
+            }
+            Ok(false)
+        }
+        (KeyModifiers::NONE, KeyCode::Right) => {
+            if app.command_palette_cursor_position < app.command_palette_input.len() {
+                app.command_palette_cursor_position += 1;
+            }
+            Ok(false)
+        }
+        (KeyModifiers::NONE, KeyCode::Home) => {
+            app.command_palette_cursor_position = 0;
+            Ok(false)
+        }
+        (KeyModifiers::NONE, KeyCode::End) => {
+            app.command_palette_cursor_position = app.command_palette_input.len();
+            Ok(false)
+        }
+        _ => Ok(false),
+    }
+}
+
+/// Handle focus mode (e.g., help overlay, editing, etc.)
+fn handle_focus_mode(app: &mut App, key: crossterm::event::KeyEvent) -> Result<bool> {
+    // For now, any key in focus mode returns to chat, or specific actions
+    match (key.modifiers, key.code) {
+        _ => {
+            app.mode = Mode::Chat; // Exit focus mode
+            Ok(false)
+        }
     }
 }
 
@@ -120,11 +215,23 @@ async fn send_to_ai(app: &mut App, prompt: &str) -> Result<String, Box<dyn std::
     let provider_name = app.session.provider.clone();
     let model = app.session.model.clone();
 
-    // Convert app messages to provider format
+    tracing::info!(
+        target: "chat_flow",
+        "Sending to AI: provider={}, model={}, message_count={}, prompt_length={}",
+        provider_name,
+        model,
+        app.session.messages.len(),
+        prompt.len()
+    );
+
+    let start_time = std::time::Instant::now();
+
+    // Convert app messages to provider format, excluding the empty placeholder for the current response
     let messages: Vec<Message> = app
         .session
         .messages
         .iter()
+        .take(app.session.messages.len().saturating_sub(1))
         .map(|m| Message {
             role: match m.role.as_str() {
                 "user" => Role::User,
@@ -137,29 +244,61 @@ async fn send_to_ai(app: &mut App, prompt: &str) -> Result<String, Box<dyn std::
         })
         .collect();
 
+    tracing::debug!(
+        target: "chat_flow",
+        "Converted {} messages to provider format",
+        messages.len()
+    );
+
     // Create appropriate provider and send
+    let mut full_response = String::new();
+
     match provider_name.as_str() {
         "ollama" => {
             let provider = crate::providers::OllamaProvider::with_model(model);
-            let response = provider.send(messages).await?;
-            Ok(response)
+            // Explicitly type the stream and remove the '?' since send_stream returns the stream itself
+            let mut stream: std::pin::Pin<
+                Box<dyn Stream<Item = Result<StreamChunk, ProviderError>> + Send>,
+            > = provider.send_stream(messages).await;
+
+            while let Some(chunk_result) = stream.next().await {
+                if let Ok(chunk) = chunk_result {
+                    full_response.push_str(&chunk.content);
+                    // Update the last message in real-time for the UI to render
+                    if let Some(msg) = app.session.messages.last_mut() {
+                        msg.content = full_response.clone();
+                    }
+                }
+            }
         }
         "anthropic" => {
             let mut provider = crate::providers::AnthropicProvider::new();
             provider.set_model(model);
-            let response = provider.send(messages).await?;
-            Ok(response)
+            if let Ok(response) = provider.send(messages).await {
+                full_response = response;
+                if let Some(msg) = app.session.messages.last_mut() {
+                    msg.content = full_response.clone();
+                }
+            }
         }
-        _ => Err(format!("Unknown provider: {}", provider_name).into()),
-    }
+        _ => return Err(format!("Unknown provider: {}", provider_name).into()),
+    };
+
+    Ok(full_response)
 }
 
 /// Handle normal mode input (async for AI responses)
-async fn handle_normal_mode(app: &mut App, key: crossterm::event::KeyEvent) -> Result<bool> {
+async fn handle_chat_mode(app: &mut App, key: crossterm::event::KeyEvent) -> Result<bool> {
     match (key.modifiers, key.code) {
         // Enter - send message
         (KeyModifiers::NONE, KeyCode::Enter) => {
             if !app.input.is_empty() {
+                // Record history if it's different from the last entry
+                if app.input_history.last() != Some(&app.input) {
+                    app.input_history.push(app.input.clone());
+                }
+                app.history_index = None;
+
                 // Check if it's a command
                 if app.input.starts_with('/') {
                     handle_slash_command(app)?;
@@ -174,30 +313,29 @@ async fn handle_normal_mode(app: &mut App, key: crossterm::event::KeyEvent) -> R
                     app.session.model = selected_model.clone();
 
                     // Notify user if router selected a different model
-                    if app.router_enabled {
-                        app.set_status(Some(format!(
-                            "Router: {} → {} ({})",
+                    if app.router_enabled
+                        && (app.session.model != selected_model
+                            || app.session.provider != selected_provider)
+                    {
+                        let status = format!(
+                            "[ROUTING] {} → {} ({})",
                             app.session.model, selected_model, selected_provider
-                        )));
+                        );
+                        // Only update status if model/provider actually changed
+                        app.debug_log(&status);
+                        app.set_status(Some(status.clone()));
+                        app.debug_log(&status);
                     }
 
                     // Add user message
                     app.add_message("user", &prompt);
                     app.input.clear();
                     app.cursor_position = 0;
+                    app.debug_log(&format!("Message sent to AI: {}", prompt));
 
-                    // Send to AI and get response
-                    app.set_status(Some("Thinking...".to_string()));
-                    match send_to_ai(app, &prompt).await {
-                        Ok(response) => {
-                            app.add_message("assistant", &response);
-                            app.set_status(None);
-                        }
-                        Err(e) => {
-                            app.add_message("system", &format!("Error: {}", e));
-                            app.set_status(None);
-                        }
-                    }
+                    // Initialize assistant message for streaming
+                    app.add_message("assistant", "");
+                    let _ = send_to_ai(app, &prompt).await;
                 }
             }
             Ok(false)
@@ -209,7 +347,8 @@ async fn handle_normal_mode(app: &mut App, key: crossterm::event::KeyEvent) -> R
                 let partial = &app.input[1..].to_lowercase();
                 let commands = [
                     "help", "clear", "quit", "exit", "provider", "model", "theme", "session",
-                    "config", "status", "version", "mode", "commit", "review", "test",
+                    "config", "status", "version", "mode", "commit", "review", "test", "router",
+                    "ollama",
                 ];
                 // Find the first command that starts with the partial
                 if let Some(matched) = commands.iter().find(|c| c.starts_with(partial.as_str())) {
@@ -272,17 +411,57 @@ async fn handle_normal_mode(app: &mut App, key: crossterm::event::KeyEvent) -> R
             Ok(false)
         }
 
-        // Up arrow - scroll messages up
+        // Up arrow - history navigation
         (KeyModifiers::NONE, KeyCode::Up) => {
-            if app.scroll_offset > 0 {
-                app.scroll_offset -= 1;
+            if !app.input_history.is_empty() {
+                let current_idx = app.history_index.unwrap_or(app.input_history.len());
+                if current_idx > 0 {
+                    let new_idx = current_idx - 1;
+                    app.history_index = Some(new_idx);
+                    app.input = app.input_history[new_idx].clone();
+                    app.cursor_position = app.input.len();
+                }
             }
             Ok(false)
         }
 
-        // Down arrow - scroll messages down
+        // Down arrow - history navigation
         (KeyModifiers::NONE, KeyCode::Down) => {
-            app.scroll_offset += 1;
+            if let Some(idx) = app.history_index {
+                let new_idx = idx + 1;
+                if new_idx < app.input_history.len() {
+                    app.history_index = Some(new_idx);
+                    app.input = app.input_history[new_idx].clone();
+                    app.cursor_position = app.input.len();
+                } else {
+                    app.history_index = None;
+                    app.input.clear();
+                    app.cursor_position = 0;
+                }
+            }
+            Ok(false)
+        }
+
+        // Page Up - scroll messages up
+        (KeyModifiers::NONE, KeyCode::PageUp) => {
+            app.auto_scroll = false;
+            if app.scroll_offset > 0 {
+                app.scroll_offset = app.scroll_offset.saturating_sub(5);
+            }
+            Ok(false)
+        }
+
+        // Page Down - scroll messages down
+        (KeyModifiers::NONE, KeyCode::PageDown) => {
+            app.auto_scroll = false;
+            app.scroll_offset += 5;
+            Ok(false)
+        }
+
+        // End - snap to bottom and enable auto-scroll
+        (KeyModifiers::NONE, KeyCode::End) => {
+            app.auto_scroll = true;
+            app.scroll_offset = 0; // Will be recalculated in render
             Ok(false)
         }
 
@@ -299,17 +478,23 @@ fn handle_slash_command(app: &mut App) -> Result<bool> {
     let parts: Vec<&str> = input[1..].split_whitespace().collect();
     let command = parts.first().unwrap_or(&"");
     let arg = parts.get(1).map(|s| *s);
+    let start = std::time::Instant::now();
 
-    match *command {
+    tracing::info!(target: "command_exec", "Executing command: /{}", command);
+    app.debug_log(&format!("Command Fired: /{command}"));
+
+    let result = match *command {
         "help" | "h" | "?" => {
-            app.mode = Mode::Help;
+            app.mode = Mode::Focus;
+            Ok(false)
         }
         "clear" | "c" => {
             app.clear_conversation();
+            Ok(false)
         }
         "quit" | "q" | "exit" => {
             app.quit();
-            return Ok(true);
+            Ok(true)
         }
         "provider" | "p" => {
             if let Some(provider_name) = arg {
@@ -317,40 +502,10 @@ fn handle_slash_command(app: &mut App) -> Result<bool> {
                 app.set_status(Some(format!("Provider changed to: {}", provider_name)));
                 app.add_message("system", &format!("✓ Provider set to: {}", provider_name));
             } else {
-                // Show all providers
-                let msg = "╔════════════════════════════════════════════════════════════════╗\n\
-║ AVAILABLE AI PROVIDERS                                          ║\n\
-╠════════════════════════════════════════════════════════════════╣\n\
-║ ANTHROPIC (Cloud)                                             ║\n\
-║   Provider: anthropic                                          ║\n\
-║   Default: claude-sonnet-4-20250514                            ║\n\
-║   Models: claude-opus-4, claude-sonnet-4, claude-haiku-4      ║\n\
-║   Setup: export ANTHROPIC_API_KEY=your_key                      ║\n\
-\n\
-║ OPENAI (Cloud)                                                 ║\n\
-║   Provider: openai                                             ║\n\
-║   Default: gpt-4o                                              ║\n\
-║   Models: gpt-4o, gpt-4o-mini, gpt-4-turbo, o1, o1-mini        ║\n\
-║   Setup: export OPENAI_API_KEY=your_key                        ║\n\
-\n\
-║ OLLAMA (Local)                                                 ║\n\
-║   Provider: ollama                                             ║\n\
-║   Default: llama3.2                                            ║\n\
-║   Setup: ollama serve && ollama pull llama3.2                  ║\n\
-\n\
-║ LM STUDIO (Local)                                              ║\n\
-║   Provider: lm_studio                                           ║\n\
-║   Default: llama3.2                                             ║\n\
-║   Setup: lms server start OR LM Studio GUI                    ║\n\
-\n\
-║ LLAMA.CPP (Local)                                              ║\n\
-║   Provider: llama_cpp                                          ║\n\
-║   Default: llama3.2                                             ║\n\
-║   Setup: llama-server binary + GGUF model files                ║\n\
-\n\
-To switch: /provider <provider_name>";
-                app.add_message("system", msg);
+                // Re-enable interactive dropdown for provider selection
+                app.open_dropdown();
             }
+            Ok(false)
         }
         "model" | "m" => {
             if let Some(model) = arg {
@@ -358,37 +513,11 @@ To switch: /provider <provider_name>";
                 app.set_status(Some(format!("Model changed to: {}", model)));
                 app.add_message("system", &format!("✓ Model set to: {}", model));
             } else {
-                // Show all models
-                let msg = "╔════════════════════════════════════════════════════════════════╗\n\
-║ CLOUD MODELS                                                   ║\n\
-╠════════════════════════════════════════════════════════════════╣\n\
-║ ANTHROPIC (Claude)                                            ║\n\
-  claude-opus-4-20250514   - Most capable (Opus 4)\n\
-  claude-sonnet-4-20250514 - Balanced (Sonnet 4) [default]\n\
-  claude-haiku-4-20250514  - Fast (Haiku 4)\n\
-  claude-3-5-sonnet-20241022 - Legacy (Sonnet 3.5)\n\
-  claude-3-5-haiku-20241022  - Legacy (Haiku 3.5)\n\
-\n\
-║ OPENAI                                                        ║\n\
-  gpt-4o       - GPT-4 Omni (recommended)\n\
-  gpt-4o-mini  - GPT-4 Omni Mini (fast, cheap)\n\
-  gpt-4-turbo  - GPT-4 Turbo\n\
-  o1           - O1 (advanced reasoning)\n\
-  o1-mini      - O1 Mini\n\
-\n\
-╔════════════════════════════════════════════════════════════════╗\n\
-║ LOCAL MODELS (Ollama / LM Studio / llama.cpp)                 ║\n\
-╠════════════════════════════════════════════════════════════════╣\n\
-  llama3.2       - Meta Llama 3.2\n\
-  llama3.1       - Meta Llama 3.1\n\
-  mistral        - Mistral\n\
-  codellama      - Code Llama\n\
-  deepseek-coder - DeepSeek Coder\n\
-  qwen2.5-coder  - Qwen 2.5 Coder\n\
-\n\
-To switch: /model <model_name>";
-                app.add_message("system", msg);
+                // Scan laptop for local models before showing interactive picker
+                app.refresh_local_models();
+                app.open_dropdown();
             }
+            Ok(false)
         }
         "theme" | "t" => {
             if let Some(theme_name) = arg {
@@ -415,6 +544,7 @@ To switch: /model <model_name>";
 To switch: /theme <theme_name>";
                 app.add_message("system", msg);
             }
+            Ok(false)
         }
         "session" | "sess" => {
             match arg {
@@ -448,6 +578,7 @@ To switch: /theme <theme_name>";
                     );
                 }
             }
+            Ok(false)
         }
         "config" | "cfg" => {
             match arg {
@@ -475,6 +606,7 @@ Config file: ~/.config/quantumn-code/config.toml",
                     app.add_message("system", "Unknown config command. Use: show, edit");
                 }
             }
+            Ok(false)
         }
         "ollama" | "o" => {
             // List detected Ollama models with details
@@ -533,6 +665,7 @@ Config file: ~/.config/quantumn-code/config.toml",
 
                 app.add_message("system", &lines.join("\n"));
             }
+            Ok(false)
         }
         "status" | "s" => {
             let status = format!(
@@ -549,10 +682,12 @@ Config file: ~/.config/quantumn-code/config.toml",
                 app.total_tokens()
             );
             app.add_message("system", &status);
+            Ok(false)
         }
         "version" | "v" => {
             let version = env!("CARGO_PKG_VERSION");
             app.add_message("system", &format!("Quantumn Code v{}", version));
+            Ok(false)
         }
         "mode" => {
             if let Some(mode_name) = arg {
@@ -579,6 +714,7 @@ Config file: ~/.config/quantumn-code/config.toml",
             } else {
                 app.add_message("system", "Available modes:\n  /mode plan  - AI plans before implementing\n  /mode build - AI implements directly\n  /mode chat  - Casual conversation");
             }
+            Ok(false)
         }
         "router" | "r" => match arg {
             Some("on") | Some("enable") => {
@@ -587,6 +723,7 @@ Config file: ~/.config/quantumn-code/config.toml",
                     "system",
                     "✓ Router enabled - automatic model switching active",
                 );
+                Ok(false)
             }
             Some("off") | Some("disable") => {
                 app.router_enabled = false;
@@ -594,6 +731,7 @@ Config file: ~/.config/quantumn-code/config.toml",
                     "system",
                     "✓ Router disabled - using manually selected model",
                 );
+                Ok(false)
             }
             Some("status") | Some("s") => {
                 let status = if app.router_enabled {
@@ -622,6 +760,7 @@ Config file: ~/.config/quantumn-code/config.toml",
                     }
                 );
                 app.add_message("system", &msg);
+                Ok(false)
             }
             Some("prefer-local") | Some("pl") => {
                 app.router_config.prefer_local = !app.router_config.prefer_local;
@@ -631,17 +770,32 @@ Config file: ~/.config/quantumn-code/config.toml",
                     "disabled"
                 };
                 app.add_message("system", &format!("✓ Prefer local models: {}", status));
+                Ok(false)
             }
             None => {
                 app.add_message("system", "Router commands:\n  /router on      - Enable automatic model switching\n  /router off     - Disable router, use manual selection\n  /router status  - Show router configuration\n  /router prefer-local - Toggle preference for local models");
+                Ok(false)
             }
             _ => {
                 app.add_message(
                     "system",
                     "Unknown router command. Use: on, off, status, prefer-local",
                 );
+                Ok(false)
             }
         },
+        "commit" => {
+            app.add_message("system", "Commit generation coming soon.");
+            Ok(false)
+        }
+        "review" => {
+            app.add_message("system", "Code review coming soon.");
+            Ok(false)
+        }
+        "test" => {
+            app.add_message("system", "Test runner coming soon.");
+            Ok(false)
+        }
         _ => {
             app.add_message(
                 "system",
@@ -650,80 +804,12 @@ Config file: ~/.config/quantumn-code/config.toml",
                     command
                 ),
             );
-        }
-    }
-
-    Ok(false)
-}
-
-/// Handle help mode
-fn handle_help_mode(app: &mut App, key: crossterm::event::KeyEvent) -> Result<bool> {
-    // Any key exits help
-    app.mode = Mode::Normal;
-    Ok(false)
-}
-
-/// Handle editing mode
-fn handle_editing_mode(app: &mut App, key: crossterm::event::KeyEvent) -> Result<bool> {
-    // TODO: Implement editor mode
-    match (key.modifiers, key.code) {
-        (KeyModifiers::NONE, KeyCode::Esc) => {
-            app.mode = Mode::Normal;
             Ok(false)
         }
-        _ => Ok(false),
-    }
-}
+    };
 
-/// Handle review mode
-fn handle_review_mode(app: &mut App, key: crossterm::event::KeyEvent) -> Result<bool> {
-    // TODO: Implement review mode
-    match (key.modifiers, key.code) {
-        (KeyModifiers::NONE, KeyCode::Esc) => {
-            app.mode = Mode::Normal;
-            Ok(false)
-        }
-        _ => Ok(false),
-    }
-}
-
-/// Handle command mode
-fn handle_command_mode(app: &mut App, key: crossterm::event::KeyEvent) -> Result<bool> {
-    // TODO: Implement command palette
-    match (key.modifiers, key.code) {
-        (KeyModifiers::NONE, KeyCode::Esc) => {
-            app.mode = Mode::Normal;
-            Ok(false)
-        }
-        _ => Ok(false),
-    }
-}
-
-/// Handle provider/model selection mode
-fn handle_provider_select_mode(app: &mut App, key: crossterm::event::KeyEvent) -> Result<bool> {
-    use crate::tui::widgets::DropdownAction;
-
-    match app.dropdown.handle_key(key) {
-        Some(DropdownAction::Confirmed(provider, model)) => {
-            app.session.provider = provider.clone();
-            app.session.model = model.clone();
-            app.dropdown.close();
-            app.mode = Mode::Normal;
-            app.add_message("system", &format!("✓ Switched to {} — {}", provider, model));
-            Ok(false)
-        }
-        Some(DropdownAction::Close) => {
-            app.dropdown.close();
-            app.mode = Mode::Normal;
-            Ok(false)
-        }
-        Some(DropdownAction::NeedsApiKey) => {
-            // Dropdown transitions itself to ApiKeyInput state; stay in ProviderSelect
-            Ok(false)
-        }
-        Some(DropdownAction::ProviderSelected) => Ok(false),
-        Some(DropdownAction::BackToProviders) => Ok(false),
-        Some(DropdownAction::Navigate) | Some(DropdownAction::OpenProviders) => Ok(false),
-        None => Ok(false),
-    }
+    let elapsed = start.elapsed();
+    tracing::info!(target: "command_exec", "Command /{} finished in {:?}", command, elapsed);
+    app.debug_log(&format!("Command /{} finished in {:?}", command, elapsed));
+    result
 }

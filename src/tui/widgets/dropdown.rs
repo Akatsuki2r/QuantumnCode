@@ -229,6 +229,23 @@ impl DropdownSelector {
         }
     }
 
+    /// Select a provider and model by name
+    pub fn select(&mut self, provider_name: &str, model_name: &str) {
+        if let Some(p_idx) = self.providers.iter().position(|p| p.name == provider_name) {
+            self.provider_index = p_idx;
+            self.selected_provider = Some(provider_name.to_string());
+
+            if let Some(m_idx) = self.providers[p_idx]
+                .models
+                .iter()
+                .position(|m| m == model_name)
+            {
+                self.model_index = m_idx;
+                self.selected_model = Some(model_name.to_string());
+            }
+        }
+    }
+
     pub fn get_current_provider(&self) -> Option<&ProviderInfo> {
         self.providers.get(self.provider_index)
     }

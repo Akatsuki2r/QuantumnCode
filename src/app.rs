@@ -2,28 +2,24 @@
 
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
+use std::time::Instant;
 
 use crate::config::settings::Settings;
 use crate::config::themes::Theme;
 use crate::providers::Provider;
 use crate::router::RouterConfig;
 use crate::tui::widgets::{DropdownSelector, KanbanBoard, TabBar};
+use ratatui::widgets::ListState;
 
 /// Current mode of the application
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Mode {
-    /// Normal input mode
-    Normal,
-    /// Editing a file
-    Editing,
-    /// Reviewing changes
-    Review,
-    /// Help screen
-    Help,
-    /// Command palette
+    /// Default chat interaction mode
+    Chat,
+    /// Command palette or slash command interaction
     Command,
-    /// Provider/model selection
-    ProviderSelect,
+    /// Focused on a specific task or full-screen overlay (e.g., help, focus work)
+    Focus,
 }
 
 /// A single message in the conversation
@@ -97,14 +93,28 @@ pub struct App {
     pub api_keys: HashMap<String, bool>,
     /// Dropdown selector for providers/models
     pub dropdown: DropdownSelector,
-    /// Tab bar
-    pub tab_bar: TabBar,
-    /// Kanban board
-    pub kanban: KanbanBoard,
     /// Router configuration for automatic model selection
     pub router_config: RouterConfig,
     /// Whether automatic model switching via router is enabled
     pub router_enabled: bool,
+    /// Input buffer for the command palette
+    pub command_palette_input: String,
+    /// Cursor position in command palette input
+    pub command_palette_cursor_position: usize,
+    /// Whether the command palette is active
+    pub command_palette_active: bool,
+    /// Last routing duration for diagnostics
+    pub last_routing_duration: Option<std::time::Duration>,
+    /// History of user inputs for the chat
+    pub input_history: Vec<String>,
+    /// Current position in history navigation
+    pub history_index: Option<usize>,
+    /// Whether to automatically scroll to the bottom
+    pub auto_scroll: bool,
+    /// Current git branch
+    pub git_branch: Option<String>,
+    /// Last time the git branch was checked
+    pub last_git_check: Instant,
 }
 
 impl App {
@@ -126,7 +136,7 @@ impl App {
                 provider: "anthropic".to_string(),
                 model: "claude-sonnet-4-20250514".to_string(),
             },
-            mode: Mode::Normal,
+            mode: Mode::Chat,
             should_quit: false,
             input: String::new(),
             cursor_position: 0,
@@ -135,10 +145,78 @@ impl App {
             providers: Vec::new(),
             api_keys: HashMap::new(),
             dropdown: DropdownSelector::new(),
-            tab_bar: TabBar::new(),
-            kanban: KanbanBoard::new(),
             router_config: RouterConfig::default(),
             router_enabled: true,
+            command_palette_input: String::new(),
+            command_palette_cursor_position: 0,
+            command_palette_active: false,
+            last_routing_duration: None,
+            input_history: Vec::new(),
+            history_index: None,
+            auto_scroll: true,
+            git_branch: Self::get_git_branch(),
+            last_git_check: Instant::now(),
+        }
+    }
+
+    /// Update git branch if enough time has passed (30s throttle)
+    pub fn update_git_status(&mut self) {
+        if self.last_git_check.elapsed().as_secs() > 30 {
+            self.git_branch = Self::get_git_branch();
+            self.last_git_check = Instant::now();
+        }
+    }
+
+    /// Force a scan of local models (Ollama/LM Studio) and update state
+    pub fn refresh_local_models(&mut self) {
+        let (names, _details, is_running) =
+            crate::providers::ollama::OllamaProvider::detect_models_comprehensive();
+        if is_running {
+            tracing::debug!(target: "debug_console", "Discovered {} local models", names.len());
+        }
+    }
+
+    /// Open the dropdown and synchronize it with the current session state
+    pub fn open_dropdown(&mut self) {
+        let provider = self.session.provider.clone();
+        let model = self.session.model.clone();
+        self.dropdown.open();
+        self.dropdown.select(&provider, &model);
+    }
+
+    fn get_git_branch() -> Option<String> {
+        std::process::Command::new("git")
+            .args(["rev-parse", "--abbrev-ref", "HEAD"])
+            .output()
+            .ok()
+            .and_then(|output| {
+                if output.status.success() {
+                    let branch = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                    if branch.is_empty() {
+                        None
+                    } else {
+                        Some(branch)
+                    }
+                } else {
+                    None
+                }
+            })
+    }
+
+    /// Add a debug log entry
+    pub fn debug_log(&mut self, message: &str) {
+        tracing::debug!(target: "debug_console", "{}", message);
+    }
+
+    /// Toggle command palette visibility
+    pub fn toggle_command_palette(&mut self) {
+        self.command_palette_active = !self.command_palette_active;
+        if self.command_palette_active {
+            self.mode = Mode::Command;
+            self.command_palette_input.clear();
+            self.command_palette_cursor_position = 0;
+        } else {
+            self.mode = Mode::Chat;
         }
     }
 
@@ -149,6 +227,12 @@ impl App {
 
         if !self.router_enabled {
             // Router disabled, use current selection
+            tracing::debug!(
+                target: "router",
+                "Router disabled, using current selection: provider={}, model={}",
+                self.session.provider,
+                self.session.model
+            );
             return (self.session.provider.clone(), self.session.model.clone());
         }
 
@@ -157,7 +241,24 @@ impl App {
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_else(|_| "/".to_string());
 
+        tracing::debug!(
+            target: "router",
+            "Routing prompt: length={}, cwd={}",
+            prompt.len(),
+            cwd
+        );
+
         let decision = route(prompt, &cwd, &self.router_config);
+
+        tracing::info!(
+            target: "router",
+            "Routing decision: intent={}, complexity={}, mode={}, tier={}, confidence={:.2}",
+            decision.intent.as_str(),
+            decision.complexity.as_str(),
+            decision.mode.as_str(),
+            decision.model_tier.as_str(),
+            decision.confidence
+        );
 
         // Map model tier to actual provider/model
         // Local tier uses discovered Ollama models, others use cloud providers
@@ -179,6 +280,13 @@ impl App {
             crate::router::ModelTier::Capable => "anthropic".to_string(),
         };
 
+        tracing::info!(
+            target: "router",
+            "Selected: provider={}, model={}",
+            provider,
+            model
+        );
+
         (provider, model)
     }
 
@@ -190,6 +298,7 @@ impl App {
             timestamp: Utc::now(),
             tokens: None,
         });
+        self.auto_scroll = true;
         self.session.updated = Utc::now();
     }
 
@@ -242,6 +351,11 @@ impl App {
     /// Set status message
     pub fn set_status(&mut self, status: Option<String>) {
         self.status = status;
+    }
+
+    /// Get status message
+    pub fn get_status(&self) -> Option<&String> {
+        self.status.as_ref()
     }
 
     /// Get total tokens used in session

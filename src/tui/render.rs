@@ -1,5 +1,6 @@
 //! TUI Application state and rendering
 
+use ratatui::layout::Alignment;
 use ratatui::prelude::*;
 use ratatui::widgets::*;
 
@@ -42,77 +43,50 @@ pub fn render(frame: &mut Frame, app: &App) {
         }
     };
 
-    // Create main layout with tabs
+    // Clear the entire area to prevent ghosting/artifacts from previous frames
+    frame.render_widget(Clear, frame.area());
+
+    // Intent-driven layout: focus on the conversation
+    // Only allocate space for suggestion bar if there's content to show
+    // Don't show empty state hint - it wastes space and can cause layout issues
+    let has_suggestions = !app.input.is_empty();
+    let suggestion_height = if has_suggestions { 2 } else { 0 };
+
     let chunks = Layout::vertical([
-        Constraint::Length(3), // Tab bar
-        Constraint::Length(1), // Status bar
-        Constraint::Min(1),    // Main content
-        Constraint::Length(3), // Input
+        Constraint::Min(1),                    // Chat Area
+        Constraint::Length(3),                 // Input
+        Constraint::Length(suggestion_height), // Suggestion bar (conditional)
+        Constraint::Length(1),                 // Status bar
     ])
     .split(frame.area());
 
-    // Render tab bar
-    app.tab_bar.render_sleek(frame, chunks[0]);
+    render_chat(frame, chunks[0], app, &colors);
+    render_input(frame, chunks[1], app, &colors);
+    if has_suggestions {
+        render_suggestions(frame, chunks[2], app, &colors);
+    }
+    render_status_bar(frame, chunks[3], app, &colors);
 
-    // Render based on active tab
-    match app.tab_bar.active_index {
-        1 => render_files_tab(frame, chunks[2], app, &colors),
-        2 => render_kanban_tab(frame, chunks[2], app, &colors),
-        3 => render_settings_tab(frame, chunks[2], app, &colors),
-        _ => {
-            // Always render chat underneath for context
-            render_status_bar(frame, chunks[1], app, &colors);
-            match app.mode {
-                Mode::ProviderSelect => render_chat(frame, chunks[2], app, &colors),
-                Mode::Normal => render_chat(frame, chunks[2], app, &colors),
-                Mode::Help => render_help(frame, chunks[2], app, &colors),
-                Mode::Editing => render_editor(frame, chunks[2], app, &colors),
-                Mode::Review => render_review(frame, chunks[2], app, &colors),
-                Mode::Command => render_command_palette(frame, chunks[2], app, &colors),
-            }
-        }
+    // Conditionally render overlays
+    if matches!(app.mode, Mode::Focus) {
+        let help_area = center_rect(80, 25, frame.area());
+        frame.render_widget(Clear, help_area);
+        render_help(frame, help_area, app, &colors);
     }
 
-    // Render input (not on settings tab)
-    if app.tab_bar.active_index != 3 {
-        render_input(frame, chunks[3], app, &colors);
+    if app.command_palette_active {
+        render_command_palette_overlay(frame, app, &colors);
     }
 
-    // Render dropdown as a SINGLE centered modal overlay — only when active
-    if matches!(app.mode, Mode::ProviderSelect) {
-        render_dropdown_overlay(frame, app, &colors);
+    // Render dropdown overlay when open (not collapsed)
+    if !matches!(
+        app.dropdown.state,
+        crate::tui::widgets::DropdownState::Closed
+    ) {
+        let dropdown_area = center_rect(60, 15, frame.area());
+        frame.render_widget(Clear, dropdown_area);
+        app.dropdown.render(frame, dropdown_area, &colors);
     }
-}
-
-/// Render the dropdown overlay for provider/model selection — single render only
-fn render_dropdown_overlay(
-    frame: &mut Frame,
-    app: &App,
-    colors: &crate::config::themes::RatatuiColors,
-) {
-    // Dim / darken the background by drawing a translucent block
-    let full = frame.area();
-    let dim_block = Block::default().style(Style::default().bg(colors.background));
-    frame.render_widget(dim_block, full);
-
-    // Centered modal — width 58 cols, height adapts to content
-    let area = center_rect(58, 18, frame.area());
-
-    // Outer modal shell — themed
-    let modal_block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(colors.accent))
-        .style(Style::default().bg(colors.background).fg(colors.foreground));
-    frame.render_widget(modal_block, area);
-
-    // Inner area with 1-cell padding
-    let inner = Rect::new(
-        area.x + 1,
-        area.y + 1,
-        area.width.saturating_sub(2),
-        area.height.saturating_sub(2),
-    );
-    app.dropdown.render(frame, inner, colors);
 }
 
 /// Center a rect within another rect
@@ -129,56 +103,55 @@ fn render_status_bar(
     app: &App,
     colors: &crate::config::themes::RatatuiColors,
 ) {
-    let router_indicator = if app.router_enabled {
-        Span::styled(
-            " [AUTO] ",
-            Style::default().fg(colors.success).bg(colors.background),
-        )
-    } else {
-        Span::styled(
-            " [MANUAL] ",
-            Style::default().fg(colors.muted).bg(colors.background),
-        )
-    };
+    // Compressed Status Bar: [Mode] (branch) [R] [Tier] [Tokens] [Model]
+    let mut spans = vec![Span::styled(
+        format!(
+            " {} ",
+            match app.mode {
+                Mode::Chat => "CHAT",
+                Mode::Command => "CMD",
+                Mode::Focus => "FOCUS",
+            }
+        ),
+        Style::default().fg(colors.background).bg(colors.accent),
+    )];
 
-    let status = Paragraph::new(Line::from(vec![
+    if let Some(ref branch) = app.git_branch {
+        spans.push(Span::raw(" "));
+        spans.push(Span::styled(
+            format!("({})", branch),
+            Style::default().fg(colors.secondary),
+        ));
+    }
+
+    spans.push(Span::raw(" "));
+    spans.push(if app.router_enabled {
+        Span::styled("[Auto]", Style::default().fg(colors.success))
+    } else {
+        Span::styled("[Man]", Style::default().fg(colors.muted))
+    });
+
+    spans.extend(vec![
+        Span::raw(" "),
         Span::styled(
-            " Quantumn ",
-            Style::default()
-                .fg(colors.accent)
-                .bg(colors.background)
-                .bold(),
+            if app.session.provider == "ollama" {
+                " [Local] "
+            } else {
+                " [Cloud] "
+            },
+            Style::default().fg(colors.info),
+        ),
+        Span::styled(
+            format!(" ~{}k ", app.total_tokens() / 1000),
+            Style::default().fg(colors.muted),
         ),
         Span::styled(
             format!(" {} ", app.session.model),
-            Style::default().fg(colors.foreground).bg(colors.background),
+            Style::default().fg(colors.muted).italic(),
         ),
-        Span::styled(
-            format!(" {} ", app.session.provider),
-            Style::default().fg(colors.muted).bg(colors.background),
-        ),
-        router_indicator,
-        Span::styled(
-            format!(" {} tokens ", app.total_tokens()),
-            Style::default().fg(colors.info).bg(colors.background),
-        ),
-        Span::styled(
-            match app.mode {
-                Mode::Normal => " NORMAL ",
-                Mode::Editing => " EDIT ",
-                Mode::Review => " REVIEW ",
-                Mode::Help => " HELP ",
-                Mode::Command => " COMMAND ",
-                Mode::ProviderSelect => " SELECT ",
-            },
-            Style::default()
-                .fg(colors.accent)
-                .bg(colors.background)
-                .bold(),
-        ),
-    ]))
-    .style(Style::default().bg(colors.background));
+    ]);
 
+    let status = Paragraph::new(Line::from(spans)).style(Style::default().bg(colors.background));
     frame.render_widget(status, area);
 }
 
@@ -189,6 +162,23 @@ fn render_chat(
     app: &App,
     colors: &crate::config::themes::RatatuiColors,
 ) {
+    let chat_block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(colors.border))
+        .title(Span::styled(
+            " Chat ",
+            Style::default().fg(colors.accent).bold(),
+        ));
+    let inner_area = chat_block.inner(area);
+
+    // Dynamic padding based on window width
+    let padding_width = match inner_area.width {
+        w if w < 60 => 2,
+        w if w < 100 => 4,
+        _ => 6,
+    } as usize;
+    let padding = " ".repeat(padding_width);
+
     // Build list of messages
     let messages: Vec<Line> = app
         .session
@@ -196,32 +186,63 @@ fn render_chat(
         .iter()
         .flat_map(|msg| {
             let role_style = match msg.role.as_str() {
-                "user" => Style::default().fg(colors.accent).bold(),
+                "user" => Style::default().fg(colors.accent),
                 "assistant" => Style::default().fg(colors.success),
                 _ => Style::default().fg(colors.muted),
             };
 
-            let role_prefix = Span::styled(
-                match msg.role.as_str() {
-                    "user" => "You: ",
-                    "assistant" => "AI: ",
-                    _ => "System: ",
-                },
-                role_style,
-            );
+            let role_icon = match msg.role.as_str() {
+                "user" => "󰭹 ",
+                "assistant" => "󰚩 ",
+                _ => "󱐋 ",
+            };
 
-            // Wrap content into lines
-            let lines: Vec<Line> = textwrap::wrap(&msg.content, area.width as usize)
-                .into_iter()
-                .map(|line| {
-                    Line::from(Span::styled(
-                        line.to_string(),
-                        Style::default().fg(colors.foreground),
-                    ))
-                })
-                .collect();
+            let mut lines = Vec::new();
+            let mut in_code_block = false;
 
-            let mut result = vec![Line::from(role_prefix)];
+            for line in msg.content.lines() {
+                // Detect code block delimiters
+                if line.trim().starts_with("```") {
+                    in_code_block = !in_code_block;
+                    let border = if in_code_block {
+                        format!("┌── Code {}", line.trim().trim_start_matches("```"))
+                    } else {
+                        "└───────".to_string()
+                    };
+                    lines.push(Line::from(Span::styled(
+                        format!("{}{}", padding, border),
+                        Style::default().fg(colors.muted).italic(),
+                    )));
+                    continue;
+                }
+
+                let style = if in_code_block {
+                    // Highlight code blocks with a different background color
+                    Style::default().fg(colors.foreground).bg(colors.muted)
+                } else {
+                    Style::default().fg(colors.foreground)
+                };
+
+                // Add slight indentation for code or specific style
+                let display_line = if in_code_block {
+                    format!("│ {}", line)
+                } else {
+                    line.to_string()
+                };
+                let wrap_width = inner_area.width.saturating_sub(padding_width as u16) as usize;
+
+                for wrapped in textwrap::wrap(&display_line, wrap_width) {
+                    lines.push(Line::from(Span::styled(
+                        format!("{}{}", padding, wrapped),
+                        style,
+                    )));
+                }
+            }
+
+            let mut result = vec![Line::from(vec![
+                Span::raw(padding.clone()),
+                Span::styled(role_icon, role_style),
+            ])];
             result.extend(lines);
             result.push(Line::default()); // Empty line between messages
 
@@ -229,10 +250,22 @@ fn render_chat(
         })
         .collect();
 
+    let total_lines = messages.len();
+    let visible_height = inner_area.height as usize;
+
+    let max_scroll = total_lines.saturating_sub(visible_height);
+
+    // Ensure the if-expression is properly grouped before the type cast
+    let scroll_offset = (if app.auto_scroll {
+        max_scroll
+    } else {
+        app.scroll_offset.min(max_scroll)
+    }) as u16;
+
     let paragraph = Paragraph::new(messages)
         .style(Style::default().fg(colors.foreground).bg(colors.background))
-        .wrap(Wrap { trim: false })
-        .scroll((app.scroll_offset as u16, 0));
+        .block(chat_block)
+        .scroll((scroll_offset, 0));
 
     frame.render_widget(paragraph, area);
 }
@@ -244,34 +277,14 @@ fn render_input(
     app: &App,
     colors: &crate::config::themes::RatatuiColors,
 ) {
+    // This is the main chat input bar
     // Show provider/model in the input title
     let provider_text = format!("[{}:{}]", app.session.provider, app.session.model);
 
-    // Slash command suggestion hint
-    let suggestion = if app.input.starts_with('/') && app.input.len() > 1 {
-        let partial = app.input[1..].to_lowercase();
-        let commands = [
-            "help", "clear", "quit", "exit", "provider", "model", "theme", "session", "config",
-            "status", "version", "mode", "commit", "review", "test",
-        ];
-        commands
-            .iter()
-            .find(|c| c.starts_with(partial.as_str()) && **c != partial.as_str())
-            .map(|c| format!("  Tab→ /{}", c))
-            .unwrap_or_default()
-    } else if app.input.is_empty() {
-        "  type / for commands, p for providers".to_string()
-    } else {
-        String::new()
-    };
-
-    let title_line = Line::from(vec![
-        Span::styled(
-            format!(" {} ", provider_text),
-            Style::default().fg(colors.accent),
-        ),
-        Span::styled(suggestion, Style::default().fg(colors.muted)),
-    ]);
+    let title_line = Line::from(vec![Span::styled(
+        format!(" {} ", provider_text),
+        Style::default().fg(colors.accent),
+    )]);
 
     let input = Paragraph::new(app.input.as_str())
         .style(Style::default().fg(colors.foreground).bg(colors.background))
@@ -285,12 +298,88 @@ fn render_input(
     frame.render_widget(input, area);
 
     // Show cursor
-    let cursor_x = (area.x + 1 + app.cursor_position as u16).min(area.x + area.width - 2);
+    let cursor_x =
+        (area.x + 1 + app.cursor_position as u16).min(area.x + area.width.saturating_sub(2));
     let cursor_y = area.y + 1;
     frame.set_cursor_position(Position {
         x: cursor_x,
         y: cursor_y,
     });
+}
+
+/// Render the suggestion bar under input
+fn render_suggestions(
+    frame: &mut Frame,
+    area: Rect,
+    app: &App,
+    colors: &crate::config::themes::RatatuiColors,
+) {
+    // Clear area to prevent artifacts from stderr or previous frames
+    frame.render_widget(Clear, area);
+
+    let mut spans = Vec::new();
+
+    if app.input.starts_with('/') {
+        let partial = if app.input.len() > 1 {
+            app.input[1..].to_lowercase()
+        } else {
+            String::new()
+        };
+
+        let commands = [
+            ("help", "show help"),
+            ("clear", "clear chat"),
+            ("quit", "exit app"),
+            ("exit", "exit app"),
+            ("provider", "select AI provider"),
+            ("model", "select AI model"),
+            ("theme", "change TUI theme"),
+            ("session", "manage sessions"),
+            ("config", "app settings"),
+            ("router", "model switching"),
+            ("ollama", "list local models"),
+            ("status", "app diagnostics"),
+            ("version", "show version"),
+            ("mode", "switch behavior"),
+            ("commit", "git commit help"),
+            ("review", "code review"),
+            ("test", "run tests"),
+        ];
+
+        let mut matches: Vec<_> = commands
+            .iter()
+            .filter(|(c, _)| c.starts_with(&partial))
+            .collect();
+
+        if !matches.is_empty() {
+            spans.push(Span::styled(" 󱊖 ", Style::default().fg(colors.accent)));
+            for (i, (cmd, desc)) in matches.iter().enumerate() {
+                if i > 0 {
+                    spans.push(Span::styled(" • ", Style::default().fg(colors.muted)));
+                }
+                spans.push(Span::styled(
+                    format!("/{}", cmd),
+                    Style::default().fg(colors.foreground).bold(),
+                ));
+                spans.push(Span::styled(
+                    format!(" {}", desc),
+                    Style::default().fg(colors.muted),
+                ));
+            }
+        }
+    } else if app.input.is_empty() {
+        spans.push(Span::styled(
+            " 󰟶 Type / for commands, p for providers, or just chat... ",
+            Style::default().fg(colors.muted).italic(),
+        ));
+    }
+
+    if !spans.is_empty() {
+        let suggestion_bar = Paragraph::new(Line::from(spans))
+            .style(Style::default().bg(colors.background))
+            .alignment(Alignment::Left);
+        frame.render_widget(suggestion_bar, area);
+    }
 }
 
 /// Render help screen
@@ -303,7 +392,7 @@ fn render_help(
     let help_text = vec![
         Line::from(Span::styled(
             "Quantumn Code - Help",
-            Style::default().fg(colors.accent).bold(),
+            Style::default().fg(colors.accent).bold().underlined(),
         )),
         Line::default(),
         Line::from(Span::styled(
@@ -317,29 +406,29 @@ fn render_help(
         Line::from("  Ctrl+L      - Clear screen"),
         Line::from("  Ctrl+S      - Save session"),
         Line::from("  F1          - Toggle help"),
-        Line::from("  F2          - Toggle file tree"),
-        Line::from("  F3          - Toggle token count"),
-        Line::from("  F4          - Change theme"),
-        Line::from("  /           - Command palette"),
-        Line::from("  ←→         - Switch tabs"),
+        Line::from("  Ctrl+K      - Open Command Palette"),
+        Line::from("  /           - Slash commands in chat"),
         Line::from("  P           - Open provider selector"),
+        Line::from("  ←→         - Switch tabs"),
+        Line::from("  Ctrl+P      - Toggle provider quick menu"),
         Line::default(),
         Line::from(Span::styled(
             "Commands:",
             Style::default().fg(colors.secondary).bold(),
         )),
-        Line::from("  /help       - Show help"),
-        Line::from("  /clear      - Clear conversation"),
-        Line::from("  /model      - List/change models"),
-        Line::from("  /ollama     - List local Ollama models"),
-        Line::from("  /router     - Toggle automatic model switching"),
-        Line::from("  /theme      - Change theme"),
-        Line::from("  /provider   - List/change providers"),
-        Line::from("  /commit     - Generate commit"),
-        Line::from("  /review     - Review code"),
-        Line::from("  /test       - Run tests"),
-        Line::from("  /status     - Show status"),
-        Line::from("  /quit       - Exit"),
+        Line::from("  /help       - Show this help screen"),
+        Line::from("  /clear      - Clear current conversation"),
+        Line::from("  /model      - List or change the active AI model"),
+        Line::from("  /ollama     - List locally available Ollama models"),
+        Line::from("  /router     - Manage automatic model switching settings"),
+        Line::from("  /theme      - Change the application's color theme"),
+        Line::from("  /provider   - List or change the active AI provider"),
+        Line::from("  /commit     - Generate a git commit message for staged changes"),
+        Line::from("  /review     - Initiate a code review of specified files"),
+        Line::from("  /test       - Run tests and analyze their output"),
+        Line::from("  /status     - Display current application diagnostics"),
+        Line::from("  /debug      - Toggle visibility of the debug log panel"),
+        Line::from("  /quit       - Exit the application"),
         Line::default(),
         Line::from(Span::styled(
             "Press any key to close",
@@ -360,198 +449,32 @@ fn render_help(
     frame.render_widget(paragraph, area);
 }
 
-/// Render editor mode
-fn render_editor(
+/// Render the command palette overlay
+fn render_command_palette_overlay(
     frame: &mut Frame,
-    area: Rect,
     app: &App,
     colors: &crate::config::themes::RatatuiColors,
 ) {
-    let paragraph = Paragraph::new("Editor mode - Coming soon")
+    let area = center_rect(60, 3, frame.area());
+
+    // Clear the background of the palette area
+    frame.render_widget(Clear, area);
+
+    let cursor_pos = app.command_palette_cursor_position as u16;
+
+    let input = Paragraph::new(app.command_palette_input.as_str())
         .style(Style::default().fg(colors.foreground).bg(colors.background))
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(colors.border))
-                .title(" Editor ")
-                .title_style(Style::default().fg(colors.accent)),
+                .border_style(Style::default().fg(colors.accent))
+                .title(" Command Palette (type command...) "),
         );
 
-    frame.render_widget(paragraph, area);
-}
+    frame.render_widget(input, area);
 
-/// Render review mode
-fn render_review(
-    frame: &mut Frame,
-    area: Rect,
-    app: &App,
-    colors: &crate::config::themes::RatatuiColors,
-) {
-    let paragraph = Paragraph::new("Review mode - Coming soon")
-        .style(Style::default().fg(colors.foreground).bg(colors.background))
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(colors.border))
-                .title(" Review ")
-                .title_style(Style::default().fg(colors.accent)),
-        );
-
-    frame.render_widget(paragraph, area);
-}
-
-/// Render command palette
-fn render_command_palette(
-    frame: &mut Frame,
-    area: Rect,
-    app: &App,
-    colors: &crate::config::themes::RatatuiColors,
-) {
-    let paragraph = Paragraph::new("Command palette - Coming soon")
-        .style(Style::default().fg(colors.foreground).bg(colors.background))
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(colors.border))
-                .title(" Commands ")
-                .title_style(Style::default().fg(colors.accent)),
-        );
-
-    frame.render_widget(paragraph, area);
-}
-
-// render_provider_select removed — dropdown is now rendered exclusively
-// through render_dropdown_overlay as a single centered modal.
-
-/// Render files tab
-fn render_files_tab(
-    frame: &mut Frame,
-    area: Rect,
-    app: &App,
-    colors: &crate::config::themes::RatatuiColors,
-) {
-    let files: Vec<Line> = app
-        .session
-        .files
-        .values()
-        .map(|f| {
-            Line::from(Span::styled(
-                format!("📄 {}", f.path),
-                Style::default().fg(colors.foreground),
-            ))
-        })
-        .collect();
-
-    let files_text = if files.is_empty() {
-        vec![Line::from(Span::styled(
-            "No files in context. Use /add <file> to add files.",
-            Style::default().fg(colors.muted),
-        ))]
-    } else {
-        files
-    };
-
-    let paragraph = Paragraph::new(files_text)
-        .style(Style::default().fg(colors.foreground).bg(colors.background))
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(colors.border))
-                .title(" Files ")
-                .title_style(Style::default().fg(colors.accent)),
-        )
-        .wrap(Wrap { trim: false });
-
-    frame.render_widget(paragraph, area);
-}
-
-/// Render kanban tab
-fn render_kanban_tab(
-    frame: &mut Frame,
-    area: Rect,
-    app: &App,
-    colors: &crate::config::themes::RatatuiColors,
-) {
-    // Header
-    let header = Paragraph::new(Line::from(vec![
-        Span::styled(" Kanban Board ", Style::default().fg(colors.accent).bold()),
-        Span::styled(
-            " - Use arrow keys to navigate, Enter to select ",
-            Style::default().fg(colors.muted),
-        ),
-    ]))
-    .style(Style::default().bg(colors.background));
-
-    let header_area = Rect::new(area.x, area.y, area.width, 1);
-    frame.render_widget(header, header_area);
-
-    // Kanban board
-    let board_area = Rect::new(area.x, area.y + 1, area.width, area.height - 1);
-    app.kanban.render(frame, board_area);
-}
-
-/// Render settings tab
-fn render_settings_tab(
-    frame: &mut Frame,
-    area: Rect,
-    app: &App,
-    colors: &crate::config::themes::RatatuiColors,
-) {
-    let router_status = if app.router_enabled {
-        "Enabled (Auto-switching)"
-    } else {
-        "Disabled (Manual)"
-    };
-
-    let settings_text = vec![
-        Line::from(Span::styled(
-            "Settings",
-            Style::default().fg(colors.accent).bold(),
-        )),
-        Line::default(),
-        Line::from(format!("Provider: {}", app.session.provider)),
-        Line::from(format!("Model: {}", app.session.model)),
-        Line::from(format!("Theme: {}", app.settings.ui.theme)),
-        Line::from(format!("Router: {}", router_status)),
-        Line::default(),
-        Line::from(Span::styled("API Keys:", Style::default().bold())),
-        Line::from(format!(
-            "  Anthropic: {}",
-            if *app.api_keys.get("anthropic").unwrap_or(&false) {
-                "✓ Set"
-            } else {
-                "✗ Not set"
-            }
-        )),
-        Line::from(format!(
-            "  OpenAI: {}",
-            if *app.api_keys.get("openai").unwrap_or(&false) {
-                "✓ Set"
-            } else {
-                "✗ Not set"
-            }
-        )),
-        Line::default(),
-        Line::from(Span::styled(
-            "Press P to change provider/model",
-            Style::default().fg(colors.muted),
-        )),
-        Line::from(Span::styled(
-            "Use /router to toggle automatic model switching",
-            Style::default().fg(colors.muted),
-        )),
-    ];
-
-    let paragraph = Paragraph::new(settings_text)
-        .style(Style::default().fg(colors.foreground).bg(colors.background))
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(colors.border))
-                .title(" Settings ")
-                .title_style(Style::default().fg(colors.accent)),
-        )
-        .wrap(Wrap { trim: false });
-
-    frame.render_widget(paragraph, area);
+    frame.set_cursor_position(Position {
+        x: (area.x + 1 + cursor_pos).min(area.x + area.width.saturating_sub(2)),
+        y: area.y + 1,
+    });
 }
