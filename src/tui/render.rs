@@ -78,6 +78,12 @@ pub fn render(frame: &mut Frame, app: &App) {
         render_command_palette_overlay(frame, app, &colors);
     }
 
+    if app.show_debug_panel {
+        let area = center_rect(90, 80, frame.area());
+        frame.render_widget(Clear, area);
+        render_debug_panel(frame, area, app, &colors);
+    }
+
     // Render dropdown overlay when open (not collapsed)
     if !matches!(
         app.dropdown.state,
@@ -127,12 +133,29 @@ fn render_status_bar(
         Style::default().fg(colors.background).bg(colors.accent),
     )];
 
-    if let Some(ref branch) = app.git_branch && available_width > 40 {
-        spans.push(Span::raw(" "));
-        spans.push(Span::styled(
-            format!("({})", branch),
-            Style::default().fg(colors.secondary),
-        ));
+    if let Some(ref branch) = app.git_branch {
+        if available_width > 40 {
+            spans.push(Span::raw(" "));
+            spans.push(Span::styled(
+                format!("({})", branch),
+                Style::default().fg(colors.secondary),
+            ));
+        }
+    }
+
+    // Show activity/status if debug mode is on
+    if app.debug_mode {
+        if let Some(ref status_msg) = app.status {
+            // Truncate status message to fit available width
+            let max_status_len = available_width.saturating_sub(spans.iter().map(|s| s.width() as u16).sum::<u16>() + 5) as usize; // +5 for brackets and spaces
+            let display_status = if status_msg.len() > max_status_len {
+                format!("{}…", &status_msg[..max_status_len.saturating_sub(1)])
+            } else {
+                status_msg.clone()
+            };
+            spans.push(Span::raw(" "));
+            spans.push(Span::styled(format!("[{}]", display_status), Style::default().fg(colors.info).bold()));
+        }
     }
 
     spans.push(Span::raw(" "));
@@ -352,6 +375,7 @@ fn render_suggestions(
             ("theme", "change TUI theme"),
             ("session", "manage sessions"),
             ("config", "app settings"),
+            ("debug", "toggle verbose status"),
             ("router", "model switching"),
             ("ollama", "list local models"),
             ("status", "app diagnostics"),
@@ -493,4 +517,37 @@ fn render_command_palette_overlay(
         x: (area.x + 1 + cursor_pos).min(area.x + area.width.saturating_sub(2)),
         y: area.y + 1,
     });
+}
+
+/// Render the dedicated debug log panel
+fn render_debug_panel(
+    frame: &mut Frame,
+    area: Rect,
+    app: &App,
+    colors: &crate::config::themes::RatatuiColors,
+) {
+    let logs: Vec<ListItem> = app.ui_debug_logs
+        .iter()
+        .map(|log| {
+            ListItem::new(Line::from(vec![
+                Span::styled(" 󰚩 ", Style::default().fg(colors.accent)),
+                Span::raw(log),
+            ]))
+        })
+        .collect();
+
+    let list = List::new(logs)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(colors.accent))
+                .title(Span::styled(
+                    " Debug Logs (Internal Buffer) ",
+                    Style::default().fg(colors.accent).bold(),
+                ))
+                .title_bottom(Span::styled(" Press Ctrl+D or Esc to close ", Style::default().fg(colors.muted))),
+        )
+        .style(Style::default().bg(colors.background).fg(colors.foreground));
+
+    frame.render_widget(list, area);
 }

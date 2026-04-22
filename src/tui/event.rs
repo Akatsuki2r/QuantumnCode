@@ -67,6 +67,12 @@ async fn handle_key_event(app: &mut App, key: crossterm::event::KeyEvent) -> Res
             return Ok(false);
         }
 
+        // Toggle Debug Panel (Ctrl+D)
+        (KeyModifiers::CONTROL, KeyCode::Char('d')) => {
+            app.show_debug_panel = !app.show_debug_panel;
+            return Ok(false);
+        }
+
         // Command Palette (Ctrl+K)
         (KeyModifiers::CONTROL, KeyCode::Char('k')) => {
             app.toggle_command_palette();
@@ -322,8 +328,9 @@ async fn handle_chat_mode(app: &mut App, key: crossterm::event::KeyEvent) -> Res
                             app.session.model, selected_model, selected_provider
                         );
                         // Only update status if model/provider actually changed
-                        app.debug_log(&status);
-                        app.set_status(Some(status.clone()));
+                        if app.debug_mode {
+                            app.set_status(Some(status.clone()));
+                        }
                         app.debug_log(&status);
                     }
 
@@ -347,7 +354,7 @@ async fn handle_chat_mode(app: &mut App, key: crossterm::event::KeyEvent) -> Res
                 let partial = &app.input[1..].to_lowercase();
                 let commands = [
                     "help", "clear", "quit", "exit", "provider", "model", "theme", "session",
-                    "config", "status", "version", "mode", "commit", "review", "test", "router",
+                    "config", "status", "version", "mode", "commit", "review", "test", "router", "debug",
                     "ollama",
                 ];
                 // Find the first command that starts with the partial
@@ -495,6 +502,20 @@ fn handle_slash_command(app: &mut App) -> Result<bool> {
         "quit" | "q" | "exit" => {
             app.quit();
             Ok(true)
+        }
+        "debug" | "dev" => {
+            app.debug_mode = !app.debug_mode;
+            let status = if app.debug_mode { "ON" } else { "OFF" };
+            app.add_message("system", &format!("✓ Debug/Verbose mode: {}", status));
+            if !app.debug_mode {
+                app.set_status(None);
+            }
+            Ok(false)
+        }
+        "logs" | "l" => {
+            app.show_debug_panel = !app.show_debug_panel;
+            app.add_message("system", "✓ Toggled debug log panel");
+            Ok(false)
         }
         "provider" | "p" => {
             if let Some(provider_name) = arg {

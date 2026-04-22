@@ -97,6 +97,12 @@ pub struct App {
     pub router_config: RouterConfig,
     /// Whether automatic model switching via router is enabled
     pub router_enabled: bool,
+    /// Whether to show verbose status/debug messages in the UI
+    pub debug_mode: bool,
+    /// Whether the dedicated debug panel is visible
+    pub show_debug_panel: bool,
+    /// Internal buffer for TUI debug display (latest 50)
+    pub ui_debug_logs: Vec<String>,
     /// Input buffer for the command palette
     pub command_palette_input: String,
     /// Cursor position in command palette input
@@ -147,6 +153,9 @@ impl App {
             dropdown: DropdownSelector::new(),
             router_config: RouterConfig::default(),
             router_enabled: true,
+            debug_mode: false,
+            show_debug_panel: false,
+            ui_debug_logs: Vec::new(),
             command_palette_input: String::new(),
             command_palette_cursor_position: 0,
             command_palette_active: false,
