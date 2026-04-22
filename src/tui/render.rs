@@ -144,6 +144,11 @@ fn render_status_bar(
         )
     };
 
+    let rag_indicator = Span::styled(
+        format!(" [RAG: {}] ", app.rag_index.document_count()),
+        Style::default().fg(colors.info).bg(colors.background),
+    );
+
     // Get the current activity status from the app
     // This shows if the model is [THINKING], [ROUTING], etc.
     let activity_status = if let Some(status) = app.get_status() {
@@ -172,6 +177,7 @@ fn render_status_bar(
             Style::default().fg(colors.muted),
         ),
         router_indicator,
+        rag_indicator,
         activity_status,
         Span::raw(" | "),
         Span::styled(

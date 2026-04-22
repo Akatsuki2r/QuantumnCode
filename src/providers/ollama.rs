@@ -621,20 +621,37 @@ impl Provider for OllamaProvider {
         &self,
         messages: Vec<Message>,
     ) -> Pin<Box<dyn Stream<Item = Result<StreamChunk, ProviderError>> + Send>> {
-        // For now, fall back to non-streaming
-        // TODO: Implement proper SSE streaming for Ollama
-        let result = self.send(messages).await;
+        let client = self.client.clone();
+        let url = format!("{}/api/chat", self.base_url);
+        let request = OllamaRequest {
+            model: self.model.clone(),
+            messages: self.convert_messages(messages),
+            stream: true,
+        };
 
-        Box::pin(futures::stream::once(async move {
-            match result {
-                Ok(text) => Ok(StreamChunk {
-                    content: text,
-                    done: true,
+        let stream = async_stream::try_stream! {
+            let response = client
+                .post(url)
+                .json(&request)
+                .send()
+                .await
+                .map_err(|e| ProviderError::NetworkError(e.to_string()))?;
+
+            let mut bytes_stream = response.bytes_stream();
+            while let Some(chunk_result) = bytes_stream.next().await {
+                let bytes = chunk_result.map_err(|e| ProviderError::ApiError(e.to_string()))?;
+                let chunk: OllamaResponse = serde_json::from_slice(&bytes)
+                    .map_err(|e| ProviderError::ApiError(e.to_string()))?;
+                
+                yield StreamChunk {
+                    content: chunk.message.content,
+                    done: chunk.done,
                     tokens: None,
-                }),
-                Err(e) => Err(e),
+                };
             }
-        }))
+        };
+
+        Box::pin(stream)
     }
 
     fn count_tokens(&self, text: &str) -> usize {

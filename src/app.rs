@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use crate::config::settings::Settings;
 use crate::config::themes::Theme;
 use crate::providers::Provider;
+use crate::rag::{RagConfig, RagIndex};
 use crate::router::RouterConfig;
 use crate::tui::widgets::{DropdownSelector, KanbanBoard, TabBar};
 use ratatui::widgets::ListState;
@@ -112,6 +113,8 @@ pub struct App {
     pub debug_visible: bool,
     /// State for the debug log list (for auto-scrolling)
     pub debug_state: ListState,
+    /// RAG index for context-aware retrieval
+    pub rag_index: RagIndex,
 }
 
 impl App {
@@ -149,7 +152,20 @@ impl App {
             debug_logs: Vec::new(),
             debug_visible: false,
             debug_state: ListState::default(),
+            rag_index: {
+                let mut index = RagIndex::new(RagConfig::default());
+                // Automatic indexing on startup
+                index
+            },
         }
+        .initialize()
+    }
+
+    /// Initialize application state (e.g., startup indexing)
+    fn initialize(mut self) -> Self {
+        self.debug_log("System: Initializing RAG index...");
+        self.index_project_files();
+        self
     }
 
     /// Add a debug log entry
@@ -170,6 +186,38 @@ impl App {
     /// Toggle debug console visibility
     pub fn toggle_debug(&mut self) {
         self.debug_visible = !self.debug_visible;
+    }
+
+    /// Search the RAG index for relevant context
+    pub fn search_context(&self, query: &str) -> crate::rag::RagResult {
+        self.rag_index.search(query)
+    }
+
+    /// Add a file to the RAG index
+    pub fn index_file(&mut self, path: String, content: String) {
+        self.rag_index.add_document(path, content);
+    }
+
+    /// Index all Rust source files in the current project
+    pub fn index_project_files(&mut self) {
+        use crate::tools::glob::find_files;
+        use std::path::Path;
+
+        let base = Path::new(".");
+        // Find all Rust source files
+        if let Ok(matches) = find_files("src/**/*.rs", base) {
+            for path in matches {
+                if let Ok(content) = std::fs::read_to_string(&path) {
+                    let path_str = path.to_string_lossy().to_string();
+                    self.index_file(path_str, content);
+                }
+            }
+            tracing::debug!(
+                target: "rag",
+                "Indexed {} files into RAG",
+                self.rag_index.document_count()
+            );
+        }
     }
 
     /// Route a prompt through the router and automatically select model

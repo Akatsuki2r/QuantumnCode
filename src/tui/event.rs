@@ -120,6 +120,7 @@ async fn handle_key_event(app: &mut App, key: crossterm::event::KeyEvent) -> Res
 /// Send a message to the AI provider and get a response
 async fn send_to_ai(app: &mut App, prompt: &str) -> Result<String, Box<dyn std::error::Error>> {
     use crate::providers::{Message, Provider, Role};
+    use crate::prompts::{get_core_identity, get_system_prompt, Mode};
 
     let provider_name = app.session.provider.clone();
     let model = app.session.model.clone();
@@ -135,11 +136,36 @@ async fn send_to_ai(app: &mut App, prompt: &str) -> Result<String, Box<dyn std::
 
     let start_time = std::time::Instant::now();
 
-    // Convert app messages to provider format
+    // Search for relevant context using RAG
+    let rag_context = app.search_context(prompt);
+    if rag_context.used && !rag_context.chunks.is_empty() {
+        let msg = format!(
+            "RAG: Retrieved {} context chunks in {}ms",
+            rag_context.chunks.len(),
+            rag_context.retrieval_time_ms
+        );
+        app.debug_log(&msg);
+        tracing::debug!(target: "chat_flow", "{}", msg);
+    }
+
+    // Build system prompt with RAG context
+    let mut system_prompt = get_core_identity().to_string();
+    system_prompt.push_str("\n\n");
+    system_prompt.push_str(get_system_prompt(Mode::Chat));
+
+    // Add RAG context if available
+    if rag_context.used && !rag_context.chunks.is_empty() {
+        system_prompt.push_str("\n\n");
+        system_prompt.push_str("## Relevant Context\n\n");
+        system_prompt.push_str(&rag_context.format_context());
+    }
+
+    // Build messages for provider - skip system messages since we're using send_with_system
     let messages: Vec<Message> = app
         .session
         .messages
         .iter()
+        .filter(|m| m.role != "system") // Skip existing system messages
         .map(|m| Message {
             role: match m.role.as_str() {
                 "user" => Role::User,
@@ -154,8 +180,9 @@ async fn send_to_ai(app: &mut App, prompt: &str) -> Result<String, Box<dyn std::
 
     tracing::debug!(
         target: "chat_flow",
-        "Converted {} messages to provider format",
-        messages.len()
+        "Converted {} messages to provider format, system_prompt length: {}",
+        messages.len(),
+        system_prompt.len()
     );
 
     // Create appropriate provider and send
@@ -164,7 +191,7 @@ async fn send_to_ai(app: &mut App, prompt: &str) -> Result<String, Box<dyn std::
             tracing::debug!(target: "chat_flow", "Creating Ollama provider with model: {}", model);
             let provider = crate::providers::OllamaProvider::with_model(model);
             tracing::trace!(target: "chat_flow", "Sending request to Ollama API");
-            let response = provider.send(messages).await?;
+            let response = provider.send_with_system(messages, Some(&system_prompt)).await?;
             tracing::debug!(target: "chat_flow", "Ollama response received, length: {}", response.len());
             response
         }
@@ -173,7 +200,7 @@ async fn send_to_ai(app: &mut App, prompt: &str) -> Result<String, Box<dyn std::
             let mut provider = crate::providers::AnthropicProvider::new();
             provider.set_model(model);
             tracing::trace!(target: "chat_flow", "Sending request to Anthropic API");
-            let response = provider.send(messages).await?;
+            let response = provider.send_with_system(messages, Some(&system_prompt)).await?;
             tracing::debug!(target: "chat_flow", "Anthropic response received, length: {}", response.len());
             response
         }
@@ -365,6 +392,15 @@ fn handle_slash_command(app: &mut App) -> Result<bool> {
         "quit" | "q" | "exit" => {
             app.quit();
             Ok(true)
+        }
+        "refresh" => {
+            app.debug_log("RAG: Refreshing project index...");
+            app.set_status(Some("Indexing project...".to_string()));
+            app.index_project_files();
+            let count = app.rag_index.document_count();
+            app.add_message("system", &format!("✓ Project re-indexed. Found {} files for RAG context.", count));
+            app.set_status(None);
+            Ok(false)
         }
         "provider" | "p" => {
             if let Some(provider_name) = arg {

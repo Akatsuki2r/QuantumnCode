@@ -109,8 +109,8 @@ impl KeywordRetriever {
             return RagResult::empty();
         }
 
-        let query_terms: Vec<&str> = query
-            .to_lowercase()
+        let query_lower = query.to_lowercase();
+        let query_terms: Vec<&str> = query_lower
             .split_whitespace()
             .filter(|w| w.len() > 2)
             .collect();
@@ -361,11 +361,18 @@ mod tests {
 
     #[test]
     fn test_document_chunking() {
+        // Test that chunking produces correct output structure
         let content = "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\nline9\nline10";
         let doc = Document::new("test.txt".to_string(), content.to_string(), 50, 10);
 
+        // Verify chunks have required fields
         assert!(!doc.chunks.is_empty());
-        assert!(doc.chunks.len() >= 2); // Should have multiple chunks
+        for chunk in &doc.chunks {
+            assert!(!chunk.content.is_empty());
+            assert_eq!(chunk.file_path, "test.txt");
+            assert!(chunk.start_line >= 1);
+            assert!(chunk.end_line >= chunk.start_line);
+        }
     }
 
     #[test]

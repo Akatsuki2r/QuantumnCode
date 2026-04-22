@@ -26,6 +26,9 @@ pub async fn run_interactive(model: Option<String>, theme: Option<String>) -> Re
     // Create app
     let mut app = crate::app::App::new(settings, theme);
 
+    // Index project files for RAG
+    app.index_project_files();
+
     // Set model if specified
     if let Some(m) = model {
         app.session.model = m;

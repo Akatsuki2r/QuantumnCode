@@ -20,6 +20,7 @@ mod commands;
 mod config;
 mod prompts;
 mod providers;
+pub mod rag;
 mod router;
 mod supervisor;
 mod tools;
