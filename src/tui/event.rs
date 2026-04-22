@@ -216,6 +216,9 @@ async fn send_to_ai(app: &mut App, prompt: &str) -> Result<String, Box<dyn std::
     let provider_name = app.session.provider.clone();
     let model = app.session.model.clone();
 
+    // Get the base system prompt for the chat
+    let system_prompt = get_system_prompt(Mode::Chat);
+
     tracing::info!(
         target: "chat_flow",
         "Sending to AI: provider={}, model={}, message_count={}, prompt_length={}",

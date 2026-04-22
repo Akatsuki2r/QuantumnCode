@@ -112,6 +112,8 @@ pub struct App {
     pub history_index: Option<usize>,
     /// Whether to automatically scroll to the bottom
     pub auto_scroll: bool,
+    /// RAG index for project context
+    pub rag_index: RagIndex,
     /// Current git branch
     pub git_branch: Option<String>,
     /// Last time the git branch was checked
@@ -155,6 +157,7 @@ impl App {
             input_history: Vec::new(),
             history_index: None,
             auto_scroll: true,
+            rag_index: RagIndex::new(RagConfig::default()),
             git_branch: Self::get_git_branch(),
             last_git_check: Instant::now(),
         }
