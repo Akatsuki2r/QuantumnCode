@@ -7,7 +7,7 @@
 - [x] Completed
 - [!] Blocked
 
-> **Last Audit**: 2026-04-11 — All items verified against actual codebase files.
+> **Last Audit**: 2026-04-23 — Corrected Phase 5.1 status (router NOT connected to TUI)
 
 ---
 
@@ -140,20 +140,27 @@
 
 ---
 
-## Phase 5: Mode Implementation — ❌ NOT STARTED (Router ↔ QueryEngine gap)
+## Phase 5: Mode Implementation — ⚠️ PARTIAL (Router exists, NOT integrated)
 
 > **BLOCKER**: The router module (`src/router/`) is fully implemented but NOT connected to
-> `QueryEngine.ts` (the 46K-line core that calls the LLM). All mode definitions, policies,
-> and strategies exist in isolation. Integration requires modifying the query pipeline.
+> the actual TUI query loop that sends prompts to the LLM. The `route()` is only called
+> in `app.rs:route_prompt()` for dropdown model selection — NOT in the message sending flow.
 
-### 5.1 Router ↔ QueryEngine Integration — ✅ COMPLETE
+### 5.1 Router ↔ QueryEngine Integration — ❌ NOT CONNECTED
 
-- [x] Call `router.route(prompt, cwd)` before each LLM API call in `src/tui/event.rs`
-- [x] Inject `ModeManager.getPromptModifications()` into system prompt assembly
-- [x] Gate tool availability via `ToolPolicyManager.isToolAllowed()` in the tool-call loop
-- [x] Apply `ContextStrategy.allocateBudget()` to limit conversation history before sending
-- [x] Call `TokenBudgetTracker.updateUsage()` after each turn with actual token counts
-- [x] Wire `ModeManager.transitionTo()` as a user-invocable command (e.g., `/mode plan`)
+- [ ] Call `router.route(prompt, cwd)` before each LLM API call in `src/tui/event.rs`
+  - **Current state**: `event.rs` send_message() does NOT call route()
+  - **Where it should go**: Before calling `app.send_message_to_provider()`
+- [ ] Inject `ModeManager.getPromptModifications()` into system prompt assembly
+  - **Current state**: Mode instructions exist but not injected into prompts
+- [ ] Gate tool availability via `ToolPolicyManager.isToolAllowed()` in the tool-call loop
+  - **Current state**: All tools passed to LLM, no filtering
+- [ ] Apply `ContextStrategy.allocateBudget()` to limit conversation history before sending
+  - **Current state**: No context budget enforcement in message sending
+- [ ] Call `TokenBudgetTracker.updateUsage()` after each turn with actual token counts
+  - **Current state**: Not implemented
+- [ ] Wire `ModeManager.transitionTo()` as a user-invocable command (e.g., `/mode plan`)
+  - **Current state**: Slash commands exist but mode switching not wired to router
 
 ### 5.2 Plan Mode
 
@@ -228,8 +235,7 @@
 - [ ] `bash` — Shell command execution
 - [ ] `glob` — File pattern search
 - [ ] `grep` — Content search
-- [/] `search` — Web search (implemented TUI hooks)
-- [/] `research` — Deep web retrieval (implemented TUI hooks)
+- [ ] `search` — Web search
 - [ ] `ask` — Ask user for clarification
 
 ### 7.3 Optimized System Prompts (target: 600 tokens total)
@@ -280,18 +286,21 @@
 3. [x] Complexity estimation: keyword-weighted scoring, 5 levels
 4. [x] Mode state machine: 5 modes, validated transitions, context preservation
 5. [x] Model tier selection: 4 tiers, escalation/de-escalation, cost-aware
-6. [x] Tool policy engine: per-intent policies, safety classifications, activation levels
+6. [x] Tool policy engine: per-intent tool policies, safety classifications, activation levels
 7. [x] Context strategy: 4 budget tiers, compression triggers
 8. [x] Memory strategy: 4 types, relevance scoring, persistence decisions
 9. [x] Token budget tracking: per-session tracking, auto-trim callbacks
 10. [x] Parallel tool execution: ExecutionGraph DAG, safety-based parallelism
 11. [x] Rust native module: 4 NAPI exports (glob, grep, tokens, prompt analysis)
 12. [x] Research documentation: 4 comprehensive research documents
+13. [x] **CORRECTED** Phase 5.1 status: Router is NOT connected to TUI query loop
 
 ### Next Up (Priority Order)
 
-1. **Router ↔ QueryEngine integration** (Phase 5.1) — CRITICAL BLOCKER
-   - The router exists but isn't used. Wire it into `QueryEngine.ts`
+1. **Router ↔ TUI integration** (Phase 5.1) — CRITICAL BLOCKER
+   - `app.rs:route_prompt()` only used for dropdown model selection, NOT in message flow
+   - Need to call `route()` in `send_message_to_provider()` before each LLM call
+   - Wire mode instructions, tool filtering, and context budget into message pipeline
 2. **Context trimming** (Phase 3.2) — Wire `enforce()` + register trim callbacks
 3. **Memory loading** (Phase 3.3) — Replace blind CLAUDE.md with `filterByRelevance()`
 4. **Rust benchmarks** (Phase 4.3) — Create Criterion benchmarks, validate speedup

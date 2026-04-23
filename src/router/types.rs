@@ -166,6 +166,8 @@ impl AgentMode {
 pub enum ModelTier {
     /// Ollama/llama.cpp - no API cost
     Local,
+    /// OpenCode Zen - free, variable quality
+    OpenCode,
     /// claude-haiku, gpt-4o-mini - quick tasks
     Fast,
     /// claude-sonnet, gpt-4o - balanced
@@ -178,6 +180,7 @@ impl ModelTier {
     pub fn as_str(&self) -> &'static str {
         match self {
             ModelTier::Local => "local",
+            ModelTier::OpenCode => "opencode",
             ModelTier::Fast => "fast",
             ModelTier::Standard => "standard",
             ModelTier::Capable => "capable",
@@ -188,6 +191,7 @@ impl ModelTier {
     pub fn default_model(&self) -> &'static str {
         match self {
             ModelTier::Local => "llama3.2:latest",
+            ModelTier::OpenCode => "qwen-2.5-coder-7b",
             ModelTier::Fast => "claude-haiku-4-20250514",
             ModelTier::Standard => "claude-sonnet-4-20250514",
             ModelTier::Capable => "claude-opus-4-20250514",

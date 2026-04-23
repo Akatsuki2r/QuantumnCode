@@ -3,10 +3,21 @@
 use color_eyre::eyre::Result;
 use futures::StreamExt;
 
-use super::tools::{execute_tool, ToolCall, ToolResult};
-use super::AGENT_SYSTEM_PROMPT;
-use crate::providers::{Message, Provider, Role, StreamChunk};
+use super::tools::{ToolCall, ToolRegistry, ToolResult};
+use super::{parse_tool_calls, AGENT_SYSTEM_PROMPT};
+use crate::providers::{Message, Provider, ProviderError, Role, StreamChunk};
 use crate::router::{route, RouterConfig, RoutingDecision};
+use thiserror::Error;
+
+/// Specific errors that can occur during agent execution
+#[derive(Error, Debug)]
+pub enum AgentError {
+    #[error("Max iterations ({0}) exceeded. The AI may be in an infinite loop.")]
+    MaxIterationsExceeded(usize),
+
+    #[error("AI provider error: {0}")]
+    Provider(#[from] ProviderError),
+}
 
 /// Max iterations to prevent infinite loops
 const MAX_ITERATIONS: usize = 50;
@@ -17,6 +28,7 @@ pub struct AgentExecutor {
     iteration: usize,
     routing: Option<RoutingDecision>,
     cwd: String,
+    tool_registry: ToolRegistry,
 }
 
 impl AgentExecutor {
@@ -40,6 +52,7 @@ impl AgentExecutor {
             iteration: 0,
             routing: None,
             cwd: cwd.to_string(),
+            tool_registry: ToolRegistry::new(),
         }
     }
 
@@ -74,29 +87,20 @@ impl AgentExecutor {
             self.iteration += 1;
 
             if self.iteration > MAX_ITERATIONS {
-                return Ok(
-                    "Error: Max iterations exceeded. The AI may be in an infinite loop."
-                        .to_string(),
-                );
+                return Err(AgentError::MaxIterationsExceeded(MAX_ITERATIONS).into());
             }
 
-            // Get routing decision
-            let routing = self.routing.as_ref().unwrap();
+            // Safely get routing decision
+            let routing = self.routing.as_ref().ok_or_else(|| {
+                color_eyre::eyre::eyre!("Agent routing was not initialized correctly")
+            })?;
 
             // Get response from AI
-            let response = match self.get_ai_response(provider).await {
-                Ok(r) => r,
-                Err(e) => {
-                    return Ok(format!(
-                        "Error: AI provider error: {}\n\n\
-                        Tips:\n\
-                        - If using Anthropic/OpenAI: ensure your API key is set (export ANTHROPIC_API_KEY=...)\n\
-                        - If using local: ensure Ollama is running (ollama serve)\n\
-                        - Try switching to Ollama: quantumn model ollama",
-                        e
-                    ));
-                }
-            };
+            let response = self.get_ai_response(provider).await.map_err(|e| {
+                // We wrap the provider error to provide helpful context/tips
+                tracing::error!(target: "agent", "Provider failure: {}", e);
+                AgentError::Provider(e)
+            })?;
 
             // Add assistant message
             self.messages.push(Message {
@@ -106,7 +110,7 @@ impl AgentExecutor {
             });
 
             // Parse tool calls
-            let tool_calls = super::parse_tool_calls(&response);
+            let tool_calls = parse_tool_calls(&response);
 
             if tool_calls.is_empty() {
                 // No more tool calls, we're done
@@ -158,27 +162,19 @@ impl AgentExecutor {
     async fn get_ai_response(
         &self,
         provider: &dyn Provider,
-    ) -> std::result::Result<String, crate::providers::ProviderError> {
+    ) -> std::result::Result<String, ProviderError> {
         // Use streaming for better UX but collect full response
         let stream = provider.send_stream(self.messages.clone()).await;
-
         let mut full_response = String::new();
 
         futures::pin_mut!(stream);
         while let Some(chunk_result) = stream.next().await {
-            match chunk_result {
-                Ok(chunk) => {
-                    print!("{}", chunk.content);
-                    std::io::Write::flush(&mut std::io::stdout()).ok();
-                    full_response.push_str(&chunk.content);
-                    if chunk.done {
-                        break;
-                    }
-                }
-                Err(e) => {
-                    eprintln!("\nAPI Error: {}", e);
-                    return Err(e);
-                }
+            let chunk = chunk_result?;
+            print!("{}", chunk.content);
+            std::io::Write::flush(&mut std::io::stdout()).ok();
+            full_response.push_str(&chunk.content);
+            if chunk.done {
+                break;
             }
         }
 
@@ -188,7 +184,10 @@ impl AgentExecutor {
 
     /// Execute tools and return results
     fn execute_tools(&self, calls: &[ToolCall]) -> Vec<ToolResult> {
-        calls.iter().map(execute_tool).collect()
+        calls
+            .iter()
+            .map(|call| self.tool_registry.execute_tool(call))
+            .collect()
     }
 
     /// Get conversation history

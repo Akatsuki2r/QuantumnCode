@@ -228,7 +228,7 @@ impl Document {
                     content: chunk_content,
                     start_line: start + 1, // 1-indexed
                     end_line: end,
-                    similarity: 0.0, // Will be computed during retrieval
+                    similarity: 0.0,   // Will be computed during retrieval
                     embedding_hash: 0, // Placeholder
                 });
             }
@@ -298,7 +298,8 @@ impl RagIndex {
 /// Compact prompts for efficient token usage
 pub mod compact_prompts {
     /// Compact system prompt template
-    pub const COMPACT_SYSTEM: &str = "QC: Local-first coding AI. Read/write/edit files, shell, analyze, search.
+    pub const COMPACT_SYSTEM: &str =
+        "QC: Local-first coding AI. Read/write/edit files, shell, analyze, search.
 MODE: {mode} | TOOLS: read,write,bash,grep,glob | GIT: safe history
 {context}";
 

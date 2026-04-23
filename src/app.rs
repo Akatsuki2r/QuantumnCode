@@ -1,7 +1,7 @@
 //! Application state management
 
 use chrono::{DateTime, Utc};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 
 use crate::config::settings::Settings;
@@ -118,6 +118,8 @@ pub struct App {
     pub git_branch: Option<String>,
     /// Last time the git branch was checked
     pub last_git_check: Instant,
+    /// Glob patterns for RAG indexing
+    pub rag_include_patterns: Vec<String>,
 }
 
 impl App {
@@ -160,6 +162,7 @@ impl App {
             rag_index: RagIndex::new(RagConfig::default()),
             git_branch: Self::get_git_branch(),
             last_git_check: Instant::now(),
+            rag_include_patterns: vec!["src/**/*.rs".to_string()],
         }
         .initialize()
     }
@@ -248,20 +251,28 @@ impl App {
         use std::path::Path;
 
         let base = Path::new(".");
-        // Find all Rust source files
-        if let Ok(matches) = find_files("src/**/*.rs", base) {
-            for path in matches {
-                if let Ok(content) = std::fs::read_to_string(&path) {
-                    let path_str = path.to_string_lossy().to_string();
-                    self.index_file(path_str, content);
+        let mut paths_to_index = HashSet::new();
+
+        for pattern in &self.rag_include_patterns {
+            if let Ok(matches) = find_files(pattern, base) {
+                for path in matches {
+                    paths_to_index.insert(path);
                 }
             }
-            tracing::debug!(
-                target: "rag",
-                "Indexed {} files into RAG",
-                self.rag_index.document_count()
-            );
         }
+
+        for path in paths_to_index {
+            if let Ok(content) = std::fs::read_to_string(&path) {
+                let path_str = path.to_string_lossy().to_string();
+                self.index_file(path_str, content);
+            }
+        }
+
+        tracing::debug!(
+            target: "rag",
+            "Indexed {} files into RAG",
+            self.rag_index.document_count()
+        );
     }
 
     /// Route a prompt through the router and automatically select model
@@ -315,10 +326,11 @@ impl App {
                 if crate::router::model::has_local_models() {
                     "ollama".to_string()
                 } else {
-                    // Fall back to fast tier if no local models
-                    "anthropic".to_string()
+                    // Fall back to opencode if no local models
+                    "opencode".to_string()
                 }
             }
+            crate::router::ModelTier::OpenCode => "opencode".to_string(),
             crate::router::ModelTier::Fast => "anthropic".to_string(),
             crate::router::ModelTier::Standard => "anthropic".to_string(),
             crate::router::ModelTier::Capable => "anthropic".to_string(),

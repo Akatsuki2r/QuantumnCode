@@ -642,7 +642,7 @@ impl Provider for OllamaProvider {
                 let bytes = chunk_result.map_err(|e| ProviderError::ApiError(e.to_string()))?;
                 let chunk: OllamaResponse = serde_json::from_slice(&bytes)
                     .map_err(|e| ProviderError::ApiError(e.to_string()))?;
-                
+
                 yield StreamChunk {
                     content: chunk.message.content,
                     done: chunk.done,

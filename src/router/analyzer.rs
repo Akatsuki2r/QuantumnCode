@@ -57,6 +57,18 @@ lazy_static::lazy_static! {
     ).expect("Failed to compile intent patterns");
 }
 
+/// File indicators for scope estimation
+const FILE_INDICATORS: &[&str] = &[
+    r"\S+\.\S+", // file.extension
+    r"src/",     // src directory
+    r"lib/",     // lib directory
+    r"tests?/",  // test directories
+];
+
+lazy_static::lazy_static! {
+    static ref FILE_SCOPE_REGEX_SET: RegexSet = RegexSet::new(FILE_INDICATORS).expect("Failed to compile file indicators");
+}
+
 /// Classify intent from user prompt using regex
 ///
 /// Uses RegexSet for single-pass matching across all patterns.
@@ -153,18 +165,8 @@ pub fn score_complexity(prompt: &str) -> Complexity {
 pub fn estimate_file_scope(prompt: &str) -> usize {
     let prompt_lower = prompt.to_lowercase();
 
-    // Count file path indicators
-    let file_indicators = [
-        r"\S+\.\S+", // file.extension
-        r"src/",     // src directory
-        r"lib/",     // lib directory
-        r"tests?/",  // test directories
-    ];
-
-    let count = file_indicators
-        .iter()
-        .filter(|ind| regex::Regex::new(ind).unwrap().is_match(prompt))
-        .count();
+    // Count file path indicators using the pre-compiled RegexSet
+    let count = FILE_SCOPE_REGEX_SET.matches(prompt).iter().count();
 
     // Also check for multi-file keywords
     let multi_file_keywords = [

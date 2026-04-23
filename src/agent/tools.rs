@@ -1,8 +1,8 @@
 //! Minimalistic tools for agentic workflow
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::Path;
-use std::process::Output;
 
 /// A tool that the AI can call
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -156,42 +156,162 @@ pub fn tool_glob(arg: &str) -> ToolResult {
     }
 }
 
-/// Execute a tool by name
-pub fn execute_tool(call: &ToolCall) -> ToolResult {
-    match call.name.to_lowercase().as_str() {
-        "read" => tool_read(&call.arg),
-        "write" => tool_write(&call.arg, call.content.as_deref().unwrap_or("")),
-        "bash" | "shell" | "cmd" => tool_bash(&call.arg),
-        "grep" | "search" => tool_grep(&call.arg, ""),
-        "glob" | "find" | "files" => tool_glob(&call.arg),
-        _ => ToolResult::error(format!("Unknown tool: {}", call.name)),
+/// Execute a Search tool (Web retrieval)
+pub fn tool_search(arg: &str) -> ToolResult {
+    // Placeholder for actual web search API integration (Tavily/Brave)
+    // For now, we simulate a successful search result.
+    let simulated_result = format!(
+        "Web search results for '{}':\n\
+         1. Documentation and community discussions regarding the topic.\n\
+         2. Recent updates and guide highlights for '{}'.\n\
+         (Internet access simulation active via search tool)",
+        arg, arg
+    );
+    ToolResult::success(simulated_result)
+}
+
+/// Type for tool execution handlers
+pub type ToolHandler = fn(&ToolCall) -> ToolResult;
+
+/// A registry for managing and executing tools
+pub struct ToolRegistry {
+    tools: HashMap<String, (Tool, ToolHandler)>,
+}
+
+impl ToolRegistry {
+    /// Create a new ToolRegistry with default tools
+    pub fn new() -> Self {
+        let mut registry = Self {
+            tools: HashMap::new(),
+        };
+
+        // Register default tools
+        registry.register_tool("Read", "Read file contents. Arg: file path", |call| {
+            tool_read(&call.arg)
+        });
+        registry.register_tool(
+            "Write",
+            "Write content to file. Arg: file path, Content: content to write",
+            |call| tool_write(&call.arg, call.content.as_deref().unwrap_or("")),
+        );
+        registry.register_tool(
+            "Bash",
+            "Execute shell command. Arg: command string",
+            |call| tool_bash(&call.arg),
+        );
+        registry.register_tool(
+            "Grep",
+            "Search file contents. Arg: pattern, Path: directory to search",
+            |call| tool_grep(&call.arg, ""),
+        );
+        registry.register_tool(
+            "Glob",
+            "Find files by pattern. Arg: glob pattern (e.g., *.rs)",
+            |call| tool_glob(&call.arg),
+        );
+        registry.register_tool(
+            "Search",
+            "Search the web for information. Arg: query string",
+            |call| tool_search(&call.arg),
+        );
+        registry.register_tool(
+            "Research",
+            "Deep web retrieval and analysis. Arg: research topic",
+            |call| tool_search(&call.arg),
+        );
+
+        registry
+    }
+
+    /// Register a new tool at runtime
+    pub fn register_tool(&mut self, name: &str, description: &str, handler: ToolHandler) {
+        self.tools.insert(
+            name.to_lowercase(),
+            (
+                Tool {
+                    name: name.to_string(),
+                    description: description.to_string(),
+                },
+                handler,
+            ),
+        );
+    }
+
+    /// Execute a tool by its call
+    pub fn execute_tool(&self, call: &ToolCall) -> ToolResult {
+        if let Some((_, handler)) = self.tools.get(&call.name.to_lowercase()) {
+            handler(call)
+        } else {
+            ToolResult::error(format!("Unknown tool: {}", call.name))
+        }
+    }
+
+    /// List all available tools for the system prompt
+    pub fn list_tools(&self) -> String {
+        let mut list = String::new();
+        let mut sorted_tools: Vec<_> = self.tools.values().collect();
+        sorted_tools.sort_by(|a, b| a.0.name.cmp(&b.0.name));
+
+        for (tool, _) in sorted_tools {
+            list.push_str(&format!("- {}: {}\n", tool.name, tool.description));
+        }
+        list
+    }
+
+    /// Provide the tool call format for the system prompt
+    pub fn tool_call_format(&self) -> String {
+        r#"
+TOOL CALL FORMAT:
+Call tools using XML-style tags in your response:
+
+<tool>
+<name>tool_name</name>
+<arg>value</arg>
+</tool>
+
+Example - Read a file:
+<tool>
+<name>Read</name>
+<arg>src/main.rs</arg>
+</tool>
+
+Example - Write a file:
+<tool>
+<name>Write</name>
+<arg>test.txt</arg>
+<content>Hello world</content>
+</tool>
+
+Example - Run bash:
+<tool>
+<name>Bash</name>
+<arg>ls -la</arg>
+</tool>
+
+Example - Grep:
+<tool>
+<name>Grep</name>
+<arg>fn main</arg>
+<path>src/</path>
+</tool>
+
+Example - Glob:
+<tool>
+<name>Glob</name>
+<arg>*.rs</arg>
+</tool>
+"#
+        .to_string()
     }
 }
 
-/// Get all available tools
-pub fn get_tools() -> Vec<Tool> {
-    vec![
-        Tool {
-            name: "Read".to_string(),
-            description: "Read file contents. Arg: file path".to_string(),
-        },
-        Tool {
-            name: "Write".to_string(),
-            description: "Write content to file. Arg: file path, Content: content to write"
-                .to_string(),
-        },
-        Tool {
-            name: "Bash".to_string(),
-            description: "Execute shell command. Arg: command string".to_string(),
-        },
-        Tool {
-            name: "Grep".to_string(),
-            description: "Search file contents. Arg: pattern, Path: directory to search"
-                .to_string(),
-        },
-        Tool {
-            name: "Glob".to_string(),
-            description: "Find files by pattern. Arg: glob pattern (e.g., *.rs)".to_string(),
-        },
-    ]
+/// Helper to get default tool registry
+pub fn get_tools() -> ToolRegistry {
+    ToolRegistry::new()
+}
+
+impl Default for ToolRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
 }

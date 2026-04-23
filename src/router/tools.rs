@@ -28,7 +28,7 @@ pub fn pick_tools(intent: Intent, mode: AgentMode) -> ToolPolicy {
 fn build_mode_tools(intent: Intent) -> ToolPolicy {
     match intent {
         // Destructive operations require confirmation
-        Intent::Delete | Intent::Bash => {
+        Intent::Delete | Intent::Bash | Intent::Write => {
             ToolPolicy::with_confirmation(ToolPolicy::default_policy())
         }
         // Git operations also need confirmation

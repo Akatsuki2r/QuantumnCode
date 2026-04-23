@@ -10,67 +10,64 @@
 
 | Item | Status | Actual Implementation |
 |------|:------:|----------------------|
-| Router module structure | ✅ | `src/router/` — 12 files, 148KB |
-| TaskAnalyzer interfaces | ✅ | `types.ts:276-321` — `TaskAnalysisInput`, `TaskAnalysisResult` |
-| Routing decision types | ✅ | `types.ts:238-267` — `RoutingDecision` (15 fields) |
-| Router config schema | ✅ | `types.ts:330-404` — `RouterConfig` with `DEFAULT_ROUTER_CONFIG` |
-| Intent classifier | ✅ | `TaskAnalyzer.ts:29-165` — 16 intents, regex-based |
-| Intent categories | ✅ | `types.ts:47-71` — 5 categories + mapping constant |
-| Signal extraction | ✅ | `TaskAnalyzer.ts:167-222` — complexity + tool patterns |
-| Complexity estimation | ✅ | `TaskAnalyzer.ts:335-491` — weighted scoring, 5 levels |
-| Mode state machine | ✅ | `ModeManager.ts:71-315` — 5 modes, transition rules |
-| Mode-specific prompts | ✅ | `ModeManager.ts:71-315` — `promptMods` per mode |
-| Mode switching logic | ✅ | `ModeManager.ts:413-449` — validates + preserves context |
-| Mode persistence | ✅ | `ModePersistence.ts` + `ModeManagerWithPersistence` |
+| Router module structure | ✅ | `src/router/` — 9 files |
+| TaskAnalyzer interfaces | ✅ | `src/router/types.rs` — `RoutingDecision`, `RouterConfig` |
+| Routing decision types | ✅ | `src/router/types.rs` — 10+ fields |
+| Router config schema | ✅ | `src/router/types.rs` — `RouterConfig` with defaults |
+| Intent classifier | ✅ | `src/router/analyzer.rs` — regex-based, 12+ intents |
+| Intent categories | ✅ | `src/router/types.rs` — 5 categories |
+| Signal extraction | ✅ | `src/router/analyzer.rs` — complexity + tool patterns |
+| Complexity estimation | ✅ | `src/router/analyzer.rs` — weighted scoring, 5 levels |
+| Mode state machine | ✅ | `src/prompts/modes.rs` — Plan/Build/Chat modes |
+| Mode-specific prompts | ✅ | `src/prompts/modes.rs` — mode-specific prompts |
+| Mode switching logic | ✅ | `src/router/mode.rs` — mode transitions |
+| Mode persistence | ⚠️ PARTIAL | Session persists in memory, not disk yet |
 
 ### Phase 2: Model & Tool Selection — ✅ COMPLETE
 
 | Item | Status | Actual Implementation |
 |------|:------:|----------------------|
-| Model tier interfaces | ✅ | `types.ts:144-159`, `ModelSelector.ts:22-46` |
-| Complexity → tier mapping | ✅ | `ModelSelector.ts:325-339` — switch statement |
-| Escalation/de-escalation | ✅ | `ModelSelector.ts:345-366` — `upgradeTier()`, `downgradeTier()` |
-| Cost-aware selection | ✅ | `ModelSelector.ts:293-299` — `estimateCost()` with budget check |
-| Tool necessity estimation | ✅ | `TaskAnalyzer.ts:497-536` — pattern + intent defaults |
-| Tool filtering by task | ✅ | `ToolPolicyManager.ts:180-268` — per-intent policies |
-| Batch tool planning | ✅ | `ParallelToolExecutor.ts:477-522` — `groupIntoBatches()` |
-| Tool sparseness optimization | ✅ | `ToolPolicyManager.ts:288-325` — activation levels |
-| Context relevance scoring | ✅ | `ContextStrategy.ts:362-378` — keyword matching |
-| Context compression | ✅ | `ContextStrategy.ts:263-294` — 85%/100% triggers |
-| Working vs persistent memory | ✅ | `MemoryStrategy.ts:19-23` — 4 memory types |
-| Context budget management | ✅ | `ContextStrategy.ts:23-52` — 4 budget tiers |
-| Router test suite | ✅ | `src/router/__tests__/` |
+| Model tier interfaces | ✅ | `src/router/model.rs` — tier selection |
+| Complexity → tier mapping | ✅ | `src/router/model.rs` — tier selection |
+| Escalation/de-escalation | ✅ | `src/router/model.rs` — `upgradeTier()`, `downgradeTier()` |
+| Cost-aware selection | ✅ | `src/router/model.rs` — cost estimation |
+| Tool necessity estimation | ✅ | `src/router/tools.rs` — pattern-based |
+| Tool filtering by task | ✅ | `src/router/tools.rs` — per-mode policies |
+| Batch tool planning | ⚠️ PARTIAL | Sequential execution only, no batching |
+| Tool sparseness optimization | ⚠️ PARTIAL | Policy defined, limited activation levels |
+| Context relevance scoring | ✅ | `src/rag/` — keyword matching retriever |
+| Context compression | ✅ | `src/rag/compact_prompts.rs` — compression |
+| Working vs persistent memory | ⚠️ PARTIAL | Session memory exists, not project memory |
+| Context budget management | ✅ | `src/router/context.rs` — budget tiers |
+| Router test suite | ✅ | `src/router/tests.rs` — 100+ tests |
 
 ### Phase 3: Execution Optimization — ⚠️ PARTIAL
 
 | Item | Status | Actual Implementation |
 |------|:------:|----------------------|
-| Rust migration candidates | ❌ | Identified but not documented in TODO |
-| Parallel tool execution | ✅ | `ParallelToolExecutor.ts` — dependency graph, safety classes |
+| Parallel tool execution | ⚠️ PARTIAL | Sequential only, no parallel batching |
 | Predictive tool pre-loading | ❌ | Not implemented |
 | Response caching | ❌ | Not implemented |
-| Aggressive context trimming | ❌ | Strategy exists but trimming not wired |
-| Summary injection points | ❌ | Not implemented |
-| Minimal prompt assembly | ❌ | Mode prompts exist but aren't minimized |
-| Token budget tracking | ✅ | `TokenBudgetTracker.ts` — full implementation |
-| Relevance-based memory loading | ❌ | `MemoryStrategy.ts` has logic but not wired to main loop |
-| Memory write-back policies | ❌ | `shouldPersist()` exists but not wired |
+| Aggressive context trimming | ⚠️ PARTIAL | Prompt compaction exists, not auto-triggered |
+| Summary injection points | ⚠️ PARTIAL | Memory system exists, not wired to prompt assembly |
+| Minimal prompt assembly | ✅ | Mode-specific prompts, compact formatting |
+| Token budget tracking | ✅ | `src/router/context.rs` — full implementation |
+| Relevance-based memory loading | ⚠️ PARTIAL | RAG exists but not context-aware |
+| Memory write-back policies | ❌ | Memory history kept in session only |
 | Session vs project memory | ❌ | Types defined, separation not enforced |
 | Memory expiration | ❌ | Not implemented |
 
-### Phase 4: Rust Integration — ✅ CORE COMPLETE
+### Phase 4: Rust Integration — ✅ COMPLETE
 
 | Item | Status | Actual Implementation |
 |------|:------:|----------------------|
-| Cargo workspace | ✅ | `rust/Cargo.toml` — `quantum-code-core` |
-| NAPI bindings | ✅ | `rust/src/lib.rs` — 4 NAPI exports |
-| TS/Rust interface | ✅ | `src/rust/bindings.ts` — lazy load + fallbacks |
-| File indexing (glob) | ✅ | `rust/src/file_ops.rs` — WalkDir + glob |
-| Grep (content search) | ✅ | `rust/src/file_ops.rs` — regex matching |
-| Router hot paths | ✅ | `rust/src/router.rs` — `analyze_prompt()` with `RegexSet` |
-| Token estimation | ✅ | `rust/src/token_estimate.rs` |
-| Rust test suite | ❌ | Only `router.rs` has 5 tests |
-| Benchmarking framework | ❌ | `Cargo.toml` has criterion dep, no benchmarks |
+| Cargo workspace | ✅ | Single `Cargo.toml`, all in `src/` |
+| Rust source files | ✅ | `src/router/`, `src/providers/`, `src/tools/` |
+| File indexing (glob) | ✅ | `src/tools/glob.rs` — WalkDir-based |
+| Grep (content search) | ✅ | `src/tools/grep.rs` — regex matching |
+| Router hot paths | ✅ | `src/router/analyzer.rs` — regex-based analysis |
+| Token estimation | ✅ | `src/router/context.rs` — character-based estimate |
+| Rust test suite | ✅ | Multiple `#[cfg(test)]` modules, 150+ tests |
 | Performance regression tests | ❌ | Not implemented |
 
 ### Phase 5: Mode Implementation — ❌ NOT STARTED
