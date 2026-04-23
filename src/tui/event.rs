@@ -209,7 +209,6 @@ fn handle_focus_mode(app: &mut App, key: crossterm::event::KeyEvent) -> Result<b
 }
 
 /// Send a message to the AI provider and get a response
-/// Send a message to the AI provider and get a response
 async fn send_to_ai(app: &mut App, prompt: &str) -> Result<String, Box<dyn std::error::Error>> {
     use crate::agent::{get_tools, AGENT_SYSTEM_PROMPT};
     use crate::prompts::{get_system_prompt, Mode as PromptMode};
@@ -222,22 +221,44 @@ async fn send_to_ai(app: &mut App, prompt: &str) -> Result<String, Box<dyn std::
         loop_count += 1;
         if loop_count > 10 {
             break;
-        }
+        } // Safety limit for tool loop
+
+        // Perform routing for each turn to adapt context and mode based on latest history
+        let cwd = std::env::current_dir()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|_| ".".to_string());
+        let decision = crate::router::route(prompt, &cwd, &app.router_config);
 
         let provider_name = app.session.provider.clone();
         let model = app.session.model.clone();
 
-        let prompt_mode = PromptMode::Chat;
-        let system_prompt = get_system_prompt(prompt_mode).to_string();
+        // Map router mode to prompt mode
+        let prompt_mode = match decision.mode.as_str() {
+            "plan" => PromptMode::Plan,
+            "build" | "implement" | "execute" => PromptMode::Build,
+            _ => PromptMode::Chat,
+        };
+        let mut system_prompt = get_system_prompt(prompt_mode).to_string();
+
+        // Inject tools into the system prompt if in agentic mode
+        if prompt_mode != PromptMode::Chat {
+            let tool_registry = get_tools();
+            system_prompt = AGENT_SYSTEM_PROMPT
+                .replace("{{TOOLS_LIST}}", &tool_registry.list_tools())
+                .replace("{{TOOL_CALL_FORMAT}}", &tool_registry.tool_call_format());
+        }
 
         tracing::info!(
             target: "chat_flow",
-            "AI Turn {}: provider={}, model={}",
+            "AI Turn {}: provider={}, model={}, intent={}, mode={:?}",
             loop_count,
             provider_name,
             model,
+            decision.intent.as_str(),
+            prompt_mode
         );
 
+        // Convert app messages to provider format
         let mut messages: Vec<Message> = app
             .session
             .messages
@@ -255,12 +276,25 @@ async fn send_to_ai(app: &mut App, prompt: &str) -> Result<String, Box<dyn std::
             })
             .collect();
 
+        // Inject mode-optimized system prompt
+        messages.insert(
+            0,
+            Message {
+                role: Role::System,
+                content: system_prompt,
+                name: None,
+            },
+        );
+
         let mut full_response = String::new();
 
         match provider_name.as_str() {
             "ollama" => {
                 let provider = crate::providers::OllamaProvider::with_model(model);
-                let mut stream = provider.send_stream(messages).await;
+                let mut stream: std::pin::Pin<
+                    Box<dyn Stream<Item = Result<StreamChunk, ProviderError>> + Send>,
+                > = provider.send_stream(messages).await;
+
                 while let Some(chunk_result) = stream.next().await {
                     if let Ok(chunk) = chunk_result {
                         full_response.push_str(&chunk.content);
@@ -295,6 +329,7 @@ async fn send_to_ai(app: &mut App, prompt: &str) -> Result<String, Box<dyn std::
 
         final_response = full_response;
 
+        // Parse and execute all tool calls automatically based on policy
         let tool_calls = crate::agent::parse_tool_calls(&final_response);
         if tool_calls.is_empty() {
             break;
@@ -302,18 +337,33 @@ async fn send_to_ai(app: &mut App, prompt: &str) -> Result<String, Box<dyn std::
 
         let mut tool_executed = false;
         for call in tool_calls {
+            // Tool Policy Enforcement
+            if !decision.tools.is_tool_allowed(&call.name) {
+                app.debug_log(&format!("Policy Blocked Tool: {}", call.name));
+                app.add_message(
+                    "system",
+                    &format!(
+                        "󰍶 Security: Tool '{}' was blocked by router policy.",
+                        call.name
+                    ),
+                );
+                continue;
+            }
+
             app.debug_log(&format!(
                 "AI requested tool: {} arg='{}'",
                 call.name, call.arg
             ));
 
             let tool_registry = crate::agent::get_tools();
+            // Execute the tool generically via registry method
             let result = tool_registry.execute_tool(&call);
 
+            // Professional status icons for different tools
             let icon = match call.name.to_lowercase().as_str() {
                 "read" => "󰈙",
                 "write" => "󰏫",
-                "bash" | "shell" | "cmd" => "�云龙",
+                "bash" | "shell" | "cmd" => "󰆍",
                 "grep" => "󰩉",
                 "search" => "󰄉",
                 "research" => "󰥼",
@@ -326,6 +376,7 @@ async fn send_to_ai(app: &mut App, prompt: &str) -> Result<String, Box<dyn std::
                 &format!("{} Executed {} for: {}", icon, call.name, call.arg),
             );
 
+            // Add result (stdout or error) back to conversation history
             let result_text = if result.success {
                 format!("[Tool Result: {}]\n{}", call.name, result.stdout)
             } else {
@@ -333,6 +384,7 @@ async fn send_to_ai(app: &mut App, prompt: &str) -> Result<String, Box<dyn std::
             };
             app.add_message("user", &result_text);
 
+            // Prepare placeholder for the AI's next response
             app.add_message("assistant", "");
             tool_executed = true;
         }
@@ -590,6 +642,33 @@ fn handle_slash_command(app: &mut App) -> Result<bool> {
                 ),
             );
             app.set_status(None);
+            Ok(false)
+        }
+        "rag" => {
+            match arg {
+                Some("include") | Some("add") => {
+                    if let Some(pattern) = parts.get(2) {
+                        app.rag_include_patterns.push(pattern.to_string());
+                        app.add_message(
+                            "system",
+                            &format!("✓ Added RAG glob pattern: {}", pattern),
+                        );
+                        app.debug_log(&format!("RAG: Added inclusion pattern: {}", pattern));
+                    } else {
+                        app.add_message("system", "Usage: /rag include <pattern>");
+                    }
+                }
+                Some("list") | Some("ls") => {
+                    let patterns = app.rag_include_patterns.join("\n  • ");
+                    app.add_message(
+                        "system",
+                        &format!("RAG Include Patterns:\n  • {}", patterns),
+                    );
+                }
+                _ => {
+                    app.add_message("system", "RAG commands:\n  /rag include <pattern> - Add a glob pattern\n  /rag list              - Show current patterns\n  /refresh               - Re-index files using patterns");
+                }
+            }
             Ok(false)
         }
         "provider" | "p" => {

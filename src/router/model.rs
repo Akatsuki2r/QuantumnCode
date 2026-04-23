@@ -137,11 +137,11 @@ pub fn tier_supports_streaming(_tier: ModelTier) -> bool {
 /// Estimate cost per 1K tokens for a tier
 pub fn estimate_cost_per_1k(tier: ModelTier) -> f64 {
     match tier {
-        ModelTier::Local => 0.0,
-        ModelTier::OpenCode => 0.0,
-        ModelTier::Fast => 0.25,
-        ModelTier::Standard => 1.0,
-        ModelTier::Capable => 3.0,
+        ModelTier::Local => 0.0,    // No API cost
+        ModelTier::OpenCode => 0.0, // Free
+        ModelTier::Fast => 0.25,    // Haiku pricing
+        ModelTier::Standard => 1.0, // Sonnet pricing
+        ModelTier::Capable => 3.0,  // Opus pricing
     }
 }
 
@@ -223,6 +223,7 @@ mod tests {
     #[test]
     fn test_get_model_for_tier() {
         assert_eq!(get_model_for_tier(ModelTier::Local), "llama3.2:latest");
+        assert_eq!(get_model_for_tier(ModelTier::OpenCode), "qwen-2.5-coder-7b");
         assert_eq!(
             get_model_for_tier(ModelTier::Fast),
             "claude-haiku-4-20250514"
@@ -240,6 +241,7 @@ mod tests {
     #[test]
     fn test_estimate_cost_per_1k() {
         assert_eq!(estimate_cost_per_1k(ModelTier::Local), 0.0);
+        assert_eq!(estimate_cost_per_1k(ModelTier::OpenCode), 0.0);
         assert_eq!(estimate_cost_per_1k(ModelTier::Fast), 0.25);
         assert_eq!(estimate_cost_per_1k(ModelTier::Standard), 1.0);
         assert_eq!(estimate_cost_per_1k(ModelTier::Capable), 3.0);
@@ -249,6 +251,7 @@ mod tests {
     fn test_tier_supports_streaming() {
         // All tiers support streaming
         assert!(tier_supports_streaming(ModelTier::Local));
+        assert!(tier_supports_streaming(ModelTier::OpenCode));
         assert!(tier_supports_streaming(ModelTier::Fast));
         assert!(tier_supports_streaming(ModelTier::Standard));
         assert!(tier_supports_streaming(ModelTier::Capable));
