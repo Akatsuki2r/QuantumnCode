@@ -118,6 +118,8 @@ pub struct App {
     pub git_branch: Option<String>,
     /// Last time the git branch was checked
     pub last_git_check: Instant,
+    /// Glob patterns for RAG indexing
+    pub rag_include_patterns: Vec<String>,
 }
 
 impl App {
@@ -160,6 +162,7 @@ impl App {
             rag_index: RagIndex::new(RagConfig::default()),
             git_branch: Self::get_git_branch(),
             last_git_check: Instant::now(),
+            rag_include_patterns: vec!["src/**/*.rs".to_string()],
         }
         .initialize()
     }
