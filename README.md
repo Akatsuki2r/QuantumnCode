@@ -18,7 +18,7 @@
 
 ## What is Quantumn Code?
 
-Quantumn Code is a local-first, high-performance coding assistant that runs in your terminal. Inspired by Claude Code, it provides intelligent code assistance through multiple AI backends while prioritizing speed, privacy, and developer experience.
+Quantumn Code is a local-first, high-performance coding assistant that runs in your terminal and heavily optimized for low end machines. Inspired by Claude Code, it provides intelligent code assistance through multiple AI backends while prioritizing speed, privacy, and developer experience.
 
 **Key Principles:**
 - **Local-First**: Works offline with Ollama or llama.cpp - no cloud required
@@ -78,11 +78,13 @@ The router makes intelligent decisions across 7 layers:
 # Install from crates.io
 cargo install quantumn
 
-# Or build from source
+### Option 5: Build from Source
+
+```bash
 git clone https://github.com/Akatsuki2r/QuantumCode.git
 cd QuantumCode
 cargo build --release
-cargo install --path .
+sudo cp target/release/quantumn /usr/local/bin/
 ```
 
 ### Option 2: npm
@@ -385,6 +387,7 @@ Run models locally - no API key required.
 ```bash
 # Install
 curl https://ollama.ai/install.sh | sh
+
 
 # Start server
 ollama serve
