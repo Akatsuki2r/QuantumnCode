@@ -6,7 +6,7 @@
 ![Rust](https://img.shields.io/badge/Rust-1.70+-orange?style=for-the-badge&logo=rust)
 ![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)
 
-**An advanced AI-powered coding assistant CLI built in Rust**
+**A local-first, high-performance AI-powered coding assistant CLI built in Rust**
 
 *Local-first • Multi-provider • High-performance • Mode-aware*
 
@@ -24,7 +24,7 @@ Quantumn Code is a local-first, high-performance coding assistant that runs in y
 - **Local-First**: Works offline with Ollama or llama.cpp - no cloud required
 - **Performance**: Built in Rust for fast startup and low memory usage
 - **Multi-Provider**: Switch seamlessly between Claude, OpenAI, Ollama, and llama.cpp
-- **Mode-Aware**: Plan mode, build mode, chat mode - each optimized for different workflows
+- **Mode-Aware**: Plan mode, build mode, chat mode, review mode, debug mode - each optimized for different workflows
 - **Privacy-Focused**: Your code stays on your machine
 
 ---
@@ -32,22 +32,34 @@ Quantumn Code is a local-first, high-performance coding assistant that runs in y
 ## Features
 
 ### Core Capabilities
+- **7-Layer Intelligent Router**: Analyzes intent, complexity, and context to select optimal execution path in < 1ms
 - **Multi-Provider AI Support**: Works with Anthropic Claude, OpenAI, Ollama (local LLMs), and llama.cpp
-- **20+ CLI Commands**: chat, edit, commit, review, test, scaffold, session management, and more
 - **Interactive TUI**: Beautiful terminal UI with multiple themes for long coding sessions
 - **Git Integration**: AI-generated commit messages, PR descriptions, and code reviews
 - **Project Scaffolding**: Create new projects from templates (Rust, Python, Node, Web, etc.)
 - **Syntax Highlighting**: Beautiful code display powered by syntect
-- **Session Management**: Save and resume conversations across work sessions
+- **Mode-Aware Execution**: 5 modes (Chat, Plan, Build, Review, Debug) with enforced tool restrictions
 - **Cross-Platform**: Works on Linux, macOS, and Windows
 
 ### AI Providers
 | Provider | Type | Models | API Key Required |
-|----------|------|--------|-----------------|
+|----------|------|--------|------------------|
 | **Anthropic Claude** | Cloud | claude-opus-4, claude-sonnet-4, claude-haiku-4 | Yes |
 | **OpenAI** | Cloud | gpt-4o, gpt-4-turbo, o1 | Yes |
 | **Ollama** | Local | llama3.2, mistral, deepseek-coder, qwen2.5 | No |
 | **llama.cpp** | Local | llama3.2, mistral (GGUF) | No |
+
+### Router Architecture
+
+The router makes intelligent decisions across 7 layers:
+
+1. **Intent Classification** - 16 intent types via regex pattern matching
+2. **Complexity Estimation** - 5 levels (Trivial → Heavy) with keyword scoring
+3. **Mode Selection** - 5 modes (Chat, Plan, Build, Review, Debug)
+4. **Model Tier Selection** - 4 tiers with cost-aware fallback
+5. **Tool Policy** - Per-intent allowed/disallowed tools
+6. **Context Strategy** - Token budget allocation (4K → 100K tokens)
+7. **Memory Policy** - Relevance-based memory loading
 
 ### Themes
 - **Oxidized** (default): Elegant rusty brown on deep black - inspired by Rust
@@ -66,10 +78,13 @@ Quantumn Code is a local-first, high-performance coding assistant that runs in y
 # Install from crates.io
 cargo install quantumn
 
-# Or build from source
+### Option 5: Build from Source
+
+```bash
 git clone https://github.com/Akatsuki2r/QuantumCode.git
 cd QuantumCode
-cargo install --path .
+cargo build --release
+sudo cp target/release/quantumn /usr/local/bin/
 ```
 
 ### Option 2: npm
@@ -99,15 +114,6 @@ echo "deb https://get.quantumn.dev/apt stable main" | sudo tee /etc/apt/sources.
 # Install
 sudo apt update
 sudo apt install quantumn-code
-```
-
-### Option 5: Build from Source
-
-```bash
-git clone https://github.com/Akatsuki2r/QuantumCode.git
-cd QuantumCode
-cargo build --release
-sudo cp target/release/quantumn /usr/local/bin/
 ```
 
 ---
@@ -219,7 +225,6 @@ quantumn model llama_cpp
    ```bash
    quantumn completions bash >> ~/.bashrc
    source ~/.bashrc
-   # Now press Tab for auto-complete!
    ```
 
 ---
@@ -289,47 +294,12 @@ quantumn model ollama                       # Show/check Ollama models
 quantumn model lm_studio                    # Show/check LM Studio models
 quantumn model llama_cpp                   # Show llama.cpp models
 
-# Shell Completions (recommended!)
-quantumn completions bash >> ~/.bashrc     # Bash
-quantumn completions zsh > ~/.zsh/completions/_quantumn  # Zsh
-source ~/.bashrc                           # Reload shell
-
 # Other
 quantumn status                            # Show system status
 quantumn version                           # Show version
 quantumn help                              # Show comprehensive help
 quantumn help providers                    # Provider setup guide
 quantumn help commands                     # Command reference
-```
-
-### Local Model Setup
-
-**Ollama:**
-```bash
-ollama serve                    # Start Ollama server
-ollama pull llama3.2           # Download a model
-ollama list                     # List installed models
-quantumn model ollama           # Switch to Ollama provider
-```
-
-**LM Studio:**
-```bash
-# GUI method:
-# 1. Download from https://lmstudio.ai
-# 2. Download a model through the app
-# 3. Click "Start Server" (Local Inference -> Server)
-# CLI method:
-lms server start               # Start LM Studio server
-quantumn model lm_studio       # Switch to LM Studio provider
-```
-
-**llama.cpp:**
-```bash
-# Build llama.cpp server
-git clone https://github.com/ggerganov/llama.cpp
-cd llama.cpp && mkdir build && cd build && cmake .. && make -j4
-# Download a GGUF model and configure
-quantumn model llama_cpp       # Switch to llama.cpp provider
 ```
 
 ### Keyboard Shortcuts (TUI)
@@ -354,9 +324,11 @@ Type `/` in interactive mode to access commands:
 |---------|-------------|
 | `/help` | Show help |
 | `/clear` | Clear chat history |
-| `/mode plan` | Plan mode (no execution) |
+| `/mode plan` | Plan mode (analysis, no execution) |
 | `/mode build` | Build mode (execution enabled) |
 | `/mode chat` | Chat mode (conversational) |
+| `/mode review` | Review mode (read-only analysis) |
+| `/mode debug` | Debug mode (diagnostic tools) |
 | `/model <name>` | Switch model |
 | `/provider <name>` | Switch provider |
 | `/theme <name>` | Switch theme |
@@ -405,7 +377,7 @@ o1-mini      # Reasoning, cheap
 
 # Pricing (per million tokens)
 # GPT-4o:      $5 input / $15 output
-# GPT-4o-mini: $0.15 input / $0.60 output
+# GPT-4o-mini: $015 input / $0.60 output
 ```
 
 ### Ollama (Local)
@@ -415,6 +387,7 @@ Run models locally - no API key required.
 ```bash
 # Install
 curl https://ollama.ai/install.sh | sh
+
 
 # Start server
 ollama serve
@@ -505,12 +478,17 @@ llama3.2 = "/path/to/model.gguf"
 
 ## Modes
 
-Quantumn Code operates in different modes for different workflows:
+Quantumn Code operates in five modes for different workflows:
+
+### Chat Mode
+- Conversational assistance
+- Minimal tool usage
+- Fast responses
+- Best for: Questions, explanations, brainstorming
 
 ### Plan Mode
-- Analyze and plan without execution
-- No writes or modifications
-- Uses smaller, faster models
+- Analysis and planning without execution
+- Read-only tools (no writes or modifications)
 - Best for: Understanding code, architecture decisions
 
 ### Build Mode
@@ -519,13 +497,17 @@ Quantumn Code operates in different modes for different workflows:
 - Uses most capable models
 - Best for: Implementing changes, fixing bugs
 
-### Chat Mode
-- Conversational assistance
-- Minimal tool usage
-- Fast responses
-- Best for: Questions, explanations, brainstorming
+### Review Mode
+- Read-only code analysis
+- Comprehensive context for understanding
+- Best for: Code reviews, debugging sessions
 
-Switch modes with `/mode plan`, `/mode build`, or `/mode chat`.
+### Debug Mode
+- Diagnostic tools only
+- Minimal context
+- Best for: Troubleshooting issues
+
+Switch modes with `/mode plan`, `/mode build`, `/mode chat`, `/mode review`, or `/mode debug`.
 
 ---
 
@@ -534,11 +516,16 @@ Switch modes with `/mode plan`, `/mode build`, or `/mode chat`.
 ```
 QuantumCode/
 ├── Cargo.toml              # Rust dependencies
+├── package.json             # NPM package (wrapper scripts only)
+├── npm/                     # NPM distribution files
 ├── src/
-│   ├── main.rs             # Entry point
-│   ├── cli.rs              # CLI argument parsing
-│   ├── app.rs              # Application state
-│   ├── commands/           # All CLI commands
+│   ├── main.rs              # Entry point
+│   ├── cli.rs               # CLI argument definitions
+│   ├── app.rs               # Application state management
+│   ├── agent/               # Agentic workflow (tool execution loop)
+│   │   ├── executor.rs      # Main agent loop with routing
+│   │   └── tools.rs         # Tool definitions and registry
+│   ├── commands/            # CLI subcommands
 │   │   ├── chat.rs
 │   │   ├── edit.rs
 │   │   ├── commit.rs
@@ -550,18 +537,65 @@ QuantumCode/
 │   │   ├── model.rs
 │   │   ├── status.rs
 │   │   └── help.rs
-│   ├── providers/          # AI provider implementations
-│   │   ├── anthropic.rs    # Claude
-│   │   ├── openai.rs       # GPT
-│   │   ├── ollama.rs       # Local models
-│   │   └── llama_cpp.rs    # llama.cpp integration
-│   ├── supervisor/         # Model supervision
-│   ├── config/             # Configuration management
-│   ├── tui/                # Terminal UI
-│   ├── tools/              # File/shell tools
-│   └── utils/              # Utilities
+│   ├── config/              # Configuration management
+│   │   ├── mod.rs
+│   │   ├── settings.rs      # Settings struct and loading
+│   │   └── themes.rs        # Theme definitions
+│   ├── providers/           # AI provider implementations
+│   │   ├── mod.rs
+│   │   ├── provider_trait.rs  # Provider trait definition
+│   │   ├── anthropic.rs     # Claude provider
+│   │   ├── openai.rs        # GPT provider
+│   │   ├── ollama.rs        # Local Ollama provider
+│   │   └── llama_cpp.rs     # llama.cpp provider
+│   ├── prompts/             # System prompts for modes
+│   │   ├── mod.rs
+│   │   ├── modes.rs         # Mode-specific prompts
+│   │   └── system.rs        # Base system prompt
+│   ├── rag/                 # RAG (Retrieval-Augmented Generation)
+│   │   ├── mod.rs
+│   │   └── compact_prompts.rs
+│   ├── router/              # 7-layer intelligent routing engine
+│   │   ├── mod.rs           # Main routing function
+│   │   ├── types.rs         # Type definitions (Intent, Mode, etc.)
+│   │   ├── analyzer.rs      # Intent classification + complexity
+│   │   ├── mode.rs          # Mode selection
+│   │   ├── model.rs         # Model tier selection
+│   │   ├── tools.rs         # Tool policy engine
+│   │   ├── context.rs       # Context budget allocation
+│   │   ├── memory.rs        # Memory policy
+│   │   └── tests.rs         # Router test suite (155 tests)
+│   ├── supervisor/          # Model supervision
+│   ├── tools/               # File/shell tools
+│   │   ├── read_file.rs
+│   │   ├── write_file.rs
+│   │   ├── bash.rs
+│   │   ├── grep.rs
+│   │   └── glob.rs
+│   ├── tui/                 # Terminal UI
+│   └── utils/               # Utilities
 └── themes/                  # Theme files
 ```
+
+---
+
+## Testing
+
+The project has comprehensive test coverage:
+
+```bash
+# Run all tests
+cargo test
+
+# Run with output
+cargo test -- --nocapture
+
+# Run specific module tests
+cargo test router
+cargo test agent
+```
+
+**Current test status**: 155 tests passing
 
 ---
 
@@ -588,7 +622,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - Inspired by [Claude Code](https://code.claude.com)
 - Built with [Ratatui](https://ratatui.rs) for the TUI
 - Syntax highlighting by [syntect](https://github.com/trishume/syntect)
-                                    
+
 ---
 
 <div align="center">
