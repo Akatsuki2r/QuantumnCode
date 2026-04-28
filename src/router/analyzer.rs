@@ -170,7 +170,8 @@ pub fn estimate_file_scope(prompt: &str) -> usize {
     let prompt_lower = prompt.to_lowercase();
 
     // Count total occurrences of all file indicators
-    let count: usize = FILE_SCOPE_REGEXES.iter()
+    let count: usize = FILE_SCOPE_REGEXES
+        .iter()
         .map(|re| re.find_iter(prompt).count())
         .sum();
 
